@@ -2,13 +2,14 @@ import os
 import numpy as np
 import glob
 import tempfile
+import inspect
+import yaml
 
 # For reading pictures
 from PIL import Image
 import fitz
 
 # Pptx modules
-import pptx
 from pptx import Presentation
 from pptx.util import Cm, Pt
 from pptx.enum.shapes import MSO_SHAPE
@@ -29,13 +30,27 @@ def flatten_list(lst):
     return flat
 
 
+def get_default_args(func):
+    signature = inspect.signature(func)
+    defaults = {k: v.default for k, v in signature.parameters.items() if v.default is not inspect.Parameter.empty}
+
+    return defaults
+
+def glob_files(lst):
+
+    content = [glob.glob(c) if "*" in c else c for c in lst]
+    content = flatten_list(content)  # flatten list in case glob extended files
+
+    return content
+
+
 class PowerPointReport():
 
     def __init__(self, template=None, size="standard"):
         """ Initialize a presentation object using an existing presentation (template) or from scratch (default) """
 
         self.template = template
-        self.prs = Presentation(template)
+        self._prs = Presentation(template)
         self.size = size
 
         # Set size of the presentation
@@ -76,8 +91,8 @@ class PowerPointReport():
         else:
             raise ValueError("Invalid size given. Choose from: 'standard', 'widescreen', 'a4-portrait', 'a4-landscape' or a tuple of floats.")
 
-        self.prs.slide_height = h
-        self.prs.slide_width = w
+        self._prs.slide_height = h
+        self._prs.slide_width = w
 
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
@@ -150,12 +165,11 @@ class PowerPointReport():
         if isinstance(content, str):
             content = [content]
 
-        content = [glob.glob(c) if "*" in c else c for c in content]
-        content = flatten_list(content)  # flatten list in case glob extended files
-
         # If split is false, content should be contained in one slide
         if split is False:
             content = [content]
+        else:
+            content = glob_files(content)
 
         # Create slide(s)
         for slide_content in content:
@@ -164,6 +178,9 @@ class PowerPointReport():
             slide = self.setup_slide(slide_layout)
             slide.add_parameters(parameters)
             slide.content = slide_content
+
+            # Glob files
+            slide._content = glob_files(slide_content)  # internal extension of content
 
             # Set title of slide
             slide.set_title(title)
@@ -178,12 +195,12 @@ class PowerPointReport():
     def setup_slide(self, slide_layout):
         """ Initialize an empty slide with a given layout. """
 
-        layout_obj = self.prs.slide_layouts[slide_layout]
-        slide_obj = self.prs.slides.add_slide(layout_obj)
+        layout_obj = self._prs.slide_layouts[slide_layout]
+        slide_obj = self._prs.slides.add_slide(layout_obj)
 
         slide = Slide(slide_obj)
-        slide._slide_height = self.prs.slide_height
-        slide._slide_width = self.prs.slide_width
+        slide._slide_height = self._prs.slide_height
+        slide._slide_width = self._prs.slide_width
         self._slides.append(slide)
 
         return slide
@@ -198,26 +215,42 @@ class PowerPointReport():
 
         self.borders = True
 
-    def get_config(self):
+    def get_config(self, full=False):
         """ Return a dictionary with the configuration of the presentation """
 
         config = {}
-        config["size"] = self.size
-        config["show_borders"] = self.borders
-        config["slides"] = []
+
+        for key in self.__dict__:
+            if key[0] != "_":
+                config[key] = self.__dict__[key]
+
+        # Get default slide config
+        defaults = get_default_args(self.add_slide)
 
         # Get config of each slide
+        config["slides"] = []
         for slide in self._slides:
             slide_config = {}
-            print(slide.__dict__)
-            slide_config["title"] = slide.shapes.title.text
-            slide_config["slide_layout"] = slide.slide_layout
-            slide_config["content_layout"] = slide.content_layout
-            slide_config["content"] = self.content
+            for key, value in slide.__dict__.items():
+                if not key.startswith("_"):
+                    slide_config[key] = slide.__dict__[key]
+
+                    if full is False:
+                        if value == defaults[key]:
+                            del slide_config[key]
+                        elif isinstance(value, list) and len(value) == 0:  # content can be an empty list
+                            del slide_config[key]
 
             config["slides"].append(slide_config)
 
         return config
+
+    def write_config(self, filename):
+
+        config = self.get_config()
+
+        with open(filename, "w") as f:
+            yaml.dump(config, f)
 
     def from_config(self, config):
         """ Create a presentation from a configuration dictionary.
@@ -243,7 +276,7 @@ class PowerPointReport():
             Filename of the presentation.
         """
 
-        self.prs.save(filename)
+        self._prs.save(filename)
 
 
 # ------------------------------------------------------------------------------
@@ -276,7 +309,7 @@ class Slide():
 
         # Get variables from self
         layout = self.content_layout
-        n_elements = len(self.content)
+        n_elements = len(self._content)
         n_columns = self.n_columns
 
         # Get layout matrix depending on "layout" variable
@@ -299,7 +332,7 @@ class Slide():
         else:
             layout_matrix = self._validate_layout(layout)  # check if layout is a valid matrix
 
-        self.layout_matrix = layout_matrix
+        self._layout_matrix = layout_matrix
 
     @staticmethod
     def _validate_layout(layout_matrix):
@@ -315,7 +348,7 @@ class Slide():
         Create boxes for the slide dependent on the intrnal layout matrix.
         """
 
-        layout_matrix = self.layout_matrix
+        layout_matrix = self._layout_matrix
         nrows, ncols = layout_matrix.shape
 
         # Convert margins from cm to pptx units
@@ -396,7 +429,7 @@ class Slide():
     def fill_boxes(self):
         """ Fill the boxes with the elements in self.content """
 
-        for i, element in enumerate(self.content):
+        for i, element in enumerate(self._content):
             self._boxes[i].fill(element)
 
 
@@ -588,4 +621,4 @@ class Box():
         txt_frame.word_wrap = True
         txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         txt_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-        #txt_frame.fit_text() # only on windows?
+        # txt_frame.fit_text() # only on windows?
