@@ -3,11 +3,16 @@ import numpy as np
 import glob
 import tempfile
 import inspect
-import yaml
+import pprint
+import json
+import re
 
 # For reading pictures
 from PIL import Image
 import fitz
+
+# For fonts
+import matplotlib
 
 # Pptx modules
 from pptx import Presentation
@@ -16,6 +21,9 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_AUTO_SIZE, MSO_ANCHOR
 from pptx.dml.color import RGBColor
 
+###############################################################################
+# ---------------------------- Helper functions ----------------------------- #
+###############################################################################
 
 def flatten_list(lst):
     """ Flatten a list containing both lists and non-lists """
@@ -36,13 +44,45 @@ def get_default_args(func):
 
     return defaults
 
-def glob_files(lst):
 
-    content = [glob.glob(c) if "*" in c else c for c in lst]
-    content = flatten_list(content)  # flatten list in case glob extended files
+def glob_files(lst):
+    """ Glob files in a list of strings which might contain "*". If no files are found for glob, raise an error. """
+
+    if isinstance(lst, str):
+        lst = [lst]
+    
+    content = []  # flattened list of files
+    for element in lst:
+        if "*" in element:
+            globbed = glob.glob(element)
+            if len(globbed) > 0:
+                content.extend(globbed)
+            else:
+                raise ValueError(f"No files could be found for pattern: '{element}'")
+        else:
+            content.append(element)
 
     return content
 
+
+def replace_quotes(string):
+    """ Replace single quotes with double quotes in a string (such as from the pprint utility to make a valid json file) """
+    
+    in_string = False
+    for i, letter in enumerate(string):
+
+        if letter == "\"":
+            in_string = not in_string  # reverse in_string flag
+
+        elif letter == "'" and in_string is False:  #do not replace single quotes in strings
+            string = string[:i] + "\"" + string[i+1:]  # replace single quote with double quote
+    
+    return string
+
+
+###############################################################################
+# ------------------- Classes for building presentation --------------------- #
+###############################################################################
 
 class PowerPointReport():
 
@@ -50,15 +90,25 @@ class PowerPointReport():
         """ Initialize a presentation object using an existing presentation (template) or from scratch (default) """
 
         self.template = template
-        self._prs = Presentation(template)
-        self.size = size
 
-        # Set size of the presentation
         if template is None:
-            self.set_size(size)
+            self.size = size
 
-        self._slides = []        # a list of SlidePlus objects
-        self.borders = False    # show borders of content boxes
+        self.initialize_presentation()
+
+        
+    def initialize_presentation(self):
+        """ Initialize a presentation from scratch. Sets the self._prs and self._slides attributes."""
+
+        self._prs = Presentation(self.template)
+
+        # Set size of the presentation (if not given by a template)
+        if self.template is None:
+            self.set_size(self.size)  # size is not set if template was given
+
+        # Get ready to add slides   
+        self._slides = []   # a list of SlidePlus objects
+
 
     def set_size(self, size):
         """
@@ -127,6 +177,7 @@ class PowerPointReport():
                   width_ratios=None,
                   height_ratios=None,
                   fontsize=12,
+                  notes=None,
                   split=False,
                   ):
         """
@@ -154,6 +205,8 @@ class PowerPointReport():
             Height of the rows in case of "grid" layout.
         fontsize : int, default 12
             Fontsize of the text in the slide.
+        notes : str, optional
+            Notes for the slide. Can be either a path to a text file or a string.
         split : bool, default False
             Split the content into multiple slides.
         """
@@ -187,10 +240,15 @@ class PowerPointReport():
 
             # Add content to slide
             if len(slide_content) > 0:
+                print(slide_content)
+                print(slide._content)
 
                 slide.set_layout_matrix()  # Find the layout of the slide
                 slide.create_boxes()       # Create boxes based on layout
                 slide.fill_boxes()         # Fill boxes with content
+
+            # Add notes to slide
+            slide.add_notes()
 
     def setup_slide(self, slide_layout):
         """ Initialize an empty slide with a given layout. """
@@ -205,18 +263,36 @@ class PowerPointReport():
 
         return slide
 
-    def show_borders(self):
-        """ Show borders of all content boxes. Useful for debugging layouts."""
+    def add_borders(self):
+        """ Add borders of all content boxes. Useful for debugging layouts."""
 
         for slide in self._slides:
-            if hasattr(slide, "boxes"):
-                for box in slide.boxes:
+            if hasattr(slide, "_boxes"):
+                for box in slide._boxes:
                     box.add_border()
 
-        self.borders = True
+    def remove_borders(self):
+        """ Remove borders (is there are any) of all content boxes. """
+
+        for slide in self._slides:
+            if hasattr(slide, "_boxes"):
+                for box in slide._boxes:
+                    box.remove_border()
 
     def get_config(self, full=False):
-        """ Return a dictionary with the configuration of the presentation """
+        """ 
+        Return a dictionary with the configuration of the presentation 
+        
+        Parameters
+        ----------
+        full : bool, default False
+            If True, return the full configuration of the presentation. If False, only return the non-default values.
+
+        Returns
+        -------
+        config : dict
+            Dictionary with the configuration of the presentation.
+        """
 
         config = {}
 
@@ -246,27 +322,51 @@ class PowerPointReport():
         return config
 
     def write_config(self, filename):
+        """ Write the configuration of the presentation to a json-formatted file. """
 
         config = self.get_config()
 
+        #Get pretty printed config
+        pp = pprint.PrettyPrinter(compact=True, sort_dicts=False)
+        config_json = pp.pformat(config)
+        config_json = replace_quotes(config_json)
+        config_json = re.sub("\"\n\s+\"", "", config_json)  # strings are not allowed to split over multiple lines
+        
         with open(filename, "w") as f:
-            yaml.dump(config, f)
+            f.write(config_json)
 
     def from_config(self, config):
-        """ Create a presentation from a configuration dictionary.
+        """ 
+        Fill a presentation from a configuration dictionary.
 
         Parameters
         ----------
-        config : dict
-            Configuration dictionary.
+        config : str or dict
+            A path to a configuration file or a dictionary containing the configuration (such as from Report.get_config()).
         """
 
-        self.set_size(config["size"])
+        # Load config from file if necessary
+        if isinstance(config, str):
+            with open(config, "r") as f:
+                try:
+                    config = json.load(f)
+                except Exception as e:
+                    raise ValueError("Could not load config file from {}. The error was: {}".format(config, e))
+        
+        # Set upper attributes
+        upper_keys = config.keys() 
+        for key in upper_keys:
+            if key != "slides":
+                setattr(self, key, config[key])
 
-        for slide in config["slides"]:
-            self.add_slide(title=slide["title"], slide_layout=slide["layout"])
+        # Initialize presentation
+        self.initialize_presentation()
 
-    def save(self, filename):
+        # Fill in slides with information from slide config
+        for slide_dict in config["slides"]:
+            self.add_slide(**slide_dict)  # add all options from slide config
+
+    def save(self, filename, show_borders=False):
         """
         Save the presentation to a file.
 
@@ -274,9 +374,18 @@ class PowerPointReport():
         ----------
         filename : str
             Filename of the presentation.
+        show_borders : bool, default False
+            Show borders of the content boxes. Is useful for debugging layouts.
         """
 
+        if show_borders is True:
+            self.add_borders()
+
         self._prs.save(filename)
+
+        # Remove borders again
+        if show_borders is True:
+            self.remove_borders()  # Remove borders again
 
 
 # ------------------------------------------------------------------------------
@@ -290,22 +399,32 @@ class Slide():
         self._boxes = []   # Boxes in the slide
 
     def set_title(self, title):
-        """ Set the title of the slide """
+        """ Set the title of the slide. """
 
         if title is not None:
             self._slide.shapes.title.text = title
 
     def add_parameters(self, parameters):
-        """ Add parameters to the slide """
+        """ Add parameters to the slide. """
 
         for key in parameters:
             if key != "self":
                 setattr(self, key, parameters[key])
 
+    def add_notes(self):
+        """ Add notes to the slide. """
+
+        if self.notes is not None:
+            if os.path.exists(self.notes):
+                with open(self.notes, "r") as f:
+                    notes_string = f.read()
+            else:
+                notes_string = self.notes
+
+            self._slide.notes_slide.notes_text_frame.text = notes_string
+
     def set_layout_matrix(self):
-        """
-        Get the content layout matrix for the slide.
-        """
+        """ Get the content layout matrix for the slide. """
 
         # Get variables from self
         layout = self.content_layout
@@ -344,9 +463,7 @@ class Slide():
         return layout_matrix
 
     def create_boxes(self):
-        """
-        Create boxes for the slide dependent on the intrnal layout matrix.
-        """
+        """ Create boxes for the slide dependent on the intrnal layout matrix. """
 
         layout_matrix = self._layout_matrix
         nrows, ncols = layout_matrix.shape
@@ -445,7 +562,8 @@ class Box():
         slide : pptx slide object
             The slide on which the box is located.
         coordinates : tuple
-            Coordinates containing (left, top, width, height) of the box (in pptx units)."""
+            Coordinates containing (left, top, width, height) of the box (in pptx units).
+        """
 
         self.slide = slide
 
@@ -470,14 +588,15 @@ class Box():
         if self.border is None:
             self.border = self.slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, self.left, self.top, self.width, self.height)
             self.border.fill.background()
-            self.border.line.color.rgb = RGBColor(0, 0, 0)
+            self.border.line.color.rgb = RGBColor(0, 0, 0)  # black
             self.border.line.width = Pt(1)
 
     def remove_border(self):
         """ Removes the border shape """
 
         if self.border is not None:
-            self.border.getparent().remove(self.border)
+            self.border._sp.getparent().remove(self.border._sp)
+            self.border = None  # reset border
 
     def fill(self, content):
         """
@@ -546,7 +665,7 @@ class Box():
         temp_name = next(tempfile._get_candidate_names()) + ".png"
         temp_dir = tempfile.gettempdir()
         temp_file = os.path.join(temp_dir, temp_name)
-        print(temp_file)
+        #print(temp_file)
 
         # Convert pdf to png
         doc = fitz.open(pdf)
@@ -621,4 +740,15 @@ class Box():
         txt_frame.word_wrap = True
         txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         txt_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-        # txt_frame.fit_text() # only on windows?
+
+        #Find all fonts and fit text to the box
+        fonts = matplotlib.font_manager.findSystemFonts()
+        for font in fonts: # try all fonts until one works
+            try:
+                txt_frame.fit_text(font_file=font)  # some fonts return a 'cannot unpack non-iterable NoneType object'-error
+                print(font + " works!")
+                break
+            except Exception as e:
+                print("font is: " + font)
+                print("font error: " + str(e))
+
