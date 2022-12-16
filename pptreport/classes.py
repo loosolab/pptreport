@@ -314,11 +314,13 @@ class PowerPointReport():
             Dictionary with the configuration of the presentation.
         """
 
+        # Collect upper-level config of presentation
         config = {}
-
         for key in self.__dict__:
-            if key[0] != "_":
-                config[key] = self.__dict__[key]
+            if key[0] != "_":  # ignore private attributes
+                value = self.__dict__[key]
+                if value is not None:  # 'template' can for example be None if no template is used
+                    config[key] = value
 
         # Get default slide config
         defaults = get_default_args(self.add_slide)
@@ -347,7 +349,7 @@ class PowerPointReport():
         config = self.get_config()
 
         #Get pretty printed config
-        pp = pprint.PrettyPrinter(compact=True, sort_dicts=False)
+        pp = pprint.PrettyPrinter(compact=True, sort_dicts=False, width=120)
         config_json = pp.pformat(config)
         config_json = replace_quotes(config_json)
         config_json = re.sub("\"\n\s+\"", "", config_json)  # strings are not allowed to split over multiple lines
