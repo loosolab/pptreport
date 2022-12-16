@@ -12,7 +12,7 @@ from PIL import Image
 import fitz
 
 # For fonts
-import matplotlib
+import matplotlib.font_manager
 
 # Pptx modules
 from pptx import Presentation
@@ -78,6 +78,32 @@ def replace_quotes(string):
             string = string[:i] + "\"" + string[i+1:]  # replace single quote with double quote
     
     return string
+
+
+def resize_text(txt_frame, max_size=18):
+    """ Resize text to fit the textbox.
+
+    Parameters
+    ----------
+    txt_frame : pptx.text.text.TextFrame
+        The text frame to be resized.
+    max_size : int, default 18
+        The maximum fontsize of the text.
+    """
+
+    # Find all fonts and fit text to the box
+    fonts = matplotlib.font_manager.findSystemFonts()
+
+    # Find a font that works
+    for font in fonts:
+        try:
+            txt_frame.fit_text(font_file=font, max_size=max_size)  # some fonts return a 'cannot unpack non-iterable NoneType object'-error
+            #print(font + " works!")
+            break
+        except Exception as e:
+            pass
+            #print("font is: " + font)
+            #print("font error: " + str(e))
 
 
 ###############################################################################
@@ -176,7 +202,6 @@ class PowerPointReport():
                   n_columns=2,
                   width_ratios=None,
                   height_ratios=None,
-                  fontsize=12,
                   notes=None,
                   split=False,
                   ):
@@ -203,8 +228,6 @@ class PowerPointReport():
             Width of the columns in case of "grid" layout.
         height_ratios : list of float, optional
             Height of the rows in case of "grid" layout.
-        fontsize : int, default 12
-            Fontsize of the text in the slide.
         notes : str, optional
             Notes for the slide. Can be either a path to a text file or a string.
         split : bool, default False
@@ -240,9 +263,6 @@ class PowerPointReport():
 
             # Add content to slide
             if len(slide_content) > 0:
-                print(slide_content)
-                print(slide._content)
-
                 slide.set_layout_matrix()  # Find the layout of the slide
                 slide.create_boxes()       # Create boxes based on layout
                 slide.fill_boxes()         # Fill boxes with content
@@ -738,17 +758,8 @@ class Box():
         p = txt_frame.paragraphs[0]
         p.text = text
         txt_frame.word_wrap = True
-        txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
         txt_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
 
-        #Find all fonts and fit text to the box
-        fonts = matplotlib.font_manager.findSystemFonts()
-        for font in fonts: # try all fonts until one works
-            try:
-                txt_frame.fit_text(font_file=font)  # some fonts return a 'cannot unpack non-iterable NoneType object'-error
-                print(font + " works!")
-                break
-            except Exception as e:
-                print("font is: " + font)
-                print("font error: " + str(e))
-
+        # Try to fit text to the box
+        resize_text(txt_frame)
+        txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE  # An additional step of resizing text to fit the box
