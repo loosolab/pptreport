@@ -2,7 +2,6 @@
 
 The pptreport package is a tool for building powerpoint presentations using a configuration file of content such as pictures and text, or step-by-step during a script or jupyter notebook. 
 
-----
 ## How to install
 
 pptreport can be installed from github using:
@@ -12,7 +11,6 @@ $ cd pptreport
 $ pip install .
 ```
 
-----
 ## Commandline usage
 An example of command-line usage is:
 ```bash
@@ -20,7 +18,7 @@ $ cd examples/
 $ pptreport --config report_config.json --output report.pptx
 ```
 
------
+
 ## Python usage
 An example of usage within python is found in the jupyter notebook:  
 [examples/write_report.ipynb](examples/write_report.ipynb)
@@ -40,7 +38,7 @@ report.add_slide("*.jpg", title="Multiple images")
 report.save("report.pptx")
 ```
 
----------------------------
+
 ## Configuration file manual
 
 A report can be built using a json-formatted configuration file with the format:
@@ -88,7 +86,7 @@ The example file at [examples/report_config.json](examples/report_config.json) g
 | notes | str | This string gives the path to a file, or the direct string, which should be added to the "notes" section of the slide. | "This text will be in notes"<br />"notes.txt" | 
 | split | bool | If number of elements in `content` is large, it might be beneficial to split the elements to separate slides. If split is True, every element in content is written to its own slide (and as such, the slide config actually expands to more than one slide). All other parameters are copied between slides. The default is False, meaning that all content is placed into one slide. | False |
 
----------------------------
+
 ## Source of example images
 
 All images and text are from Wikipedia and Wikimedia Commons:
