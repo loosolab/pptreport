@@ -217,7 +217,7 @@ class PowerPointReport():
         slide_layout : int, default 1
             Layout of the slide.
         content_layout : str, default "grid"
-            Layout of the slide. Can be "grid", "vertical" or "horizontal". Can also be a numpy array of integers indicating the layout of the slide.
+            Layout of the slide. Can be "grid", "vertical" or "horizontal". Can also be an array of integers indicating the layout of the slide.
         outer_margin : float, default 2
             Outer margin of the slide (in cm).
         inner_margin : float, default 1
