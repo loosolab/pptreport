@@ -351,7 +351,7 @@ class PowerPointReport():
         # Collect upper-level config of presentation
         config = {}
         for key in self.__dict__:
-            if key[0] != "_":  # ignore private attributes
+            if key[0] != "_" and key != "logger":  # ignore private attributes and logger
                 value = self.__dict__[key]
                 if value is not None:  # 'template' can for example be None if no template is used
                     config[key] = value
@@ -364,8 +364,15 @@ class PowerPointReport():
         for slide in self._slides:
             slide_config = {}
             for key, value in slide.__dict__.items():
-                if not key.startswith("_") and key != "logger":  # ignore private attributes
-                    slide_config[key] = slide.__dict__[key]
+                if not key.startswith("_") and key != "logger":  # ignore private attributes and logger
+                    value = slide.__dict__[key]
+
+                    if isinstance(value, bool):
+                        value_converted = str(value)  # convert bool to str to make it json-compatible
+                    else:
+                        value_converted = value
+
+                    slide_config[key] = value_converted
 
                     if full is False:
                         if value == defaults[key]:
@@ -414,6 +421,9 @@ class PowerPointReport():
         for key in upper_keys:
             if key != "slides":
                 setattr(self, key, config[key])
+
+                if key == "split":
+                    self.split = bool(config[key])  # convert input string to bool
 
         # Initialize presentation
         self.initialize_presentation()
