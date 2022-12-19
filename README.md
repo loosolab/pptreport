@@ -6,7 +6,7 @@ The pptreport package is a tool for building powerpoint presentations using a co
 
 pptreport can be installed from github using:
 ```bash
-$ git clone https://github.com/loosolab/pptreport.git
+$ git clone https://gitlab.gwdg.de/loosolab/software/pptreport.git
 $ cd pptreport 
 $ pip install .
 ```
