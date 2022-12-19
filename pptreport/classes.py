@@ -6,6 +6,9 @@ import inspect
 import pprint
 import json
 import re
+import subprocess
+import logging
+import sys
 
 # For reading pictures
 from PIL import Image
@@ -24,6 +27,7 @@ from pptx.dml.color import RGBColor
 ###############################################################################
 # ---------------------------- Helper functions ----------------------------- #
 ###############################################################################
+
 
 def flatten_list(lst):
     """ Flatten a list containing both lists and non-lists """
@@ -50,7 +54,7 @@ def glob_files(lst):
 
     if isinstance(lst, str):
         lst = [lst]
-    
+
     content = []  # flattened list of files
     for element in lst:
         if "*" in element:
@@ -67,16 +71,16 @@ def glob_files(lst):
 
 def replace_quotes(string):
     """ Replace single quotes with double quotes in a string (such as from the pprint utility to make a valid json file) """
-    
+
     in_string = False
     for i, letter in enumerate(string):
 
         if letter == "\"":
             in_string = not in_string  # reverse in_string flag
 
-        elif letter == "'" and in_string is False:  #do not replace single quotes in strings
-            string = string[:i] + "\"" + string[i+1:]  # replace single quote with double quote
-    
+        elif letter == "'" and in_string is False:  # do not replace single quotes in strings
+            string = string[:i] + "\"" + string[i + 1:]  # replace single quote with double quote
+
     return string
 
 
@@ -98,12 +102,9 @@ def resize_text(txt_frame, max_size=18):
     for font in fonts:
         try:
             txt_frame.fit_text(font_file=font, max_size=max_size)  # some fonts return a 'cannot unpack non-iterable NoneType object'-error
-            #print(font + " works!")
             break
-        except Exception as e:
+        except Exception:
             pass
-            #print("font is: " + font)
-            #print("font error: " + str(e))
 
 
 ###############################################################################
@@ -112,7 +113,7 @@ def resize_text(txt_frame, max_size=18):
 
 class PowerPointReport():
 
-    def __init__(self, template=None, size="standard"):
+    def __init__(self, template=None, size="standard", verbosity=0):
         """ Initialize a presentation object using an existing presentation (template) or from scratch (default) """
 
         self.template = template
@@ -120,9 +121,36 @@ class PowerPointReport():
         if template is None:
             self.size = size
 
+        self.setup_logger(verbosity)
+
+        self.logger.info("Initializing presentation")
         self.initialize_presentation()
 
-        
+    def setup_logger(self, verbosity=1):
+        """ Setup a logger for the class in self.logger """
+
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Setup formatting of handler
+        H = logging.StreamHandler(sys.stdout)
+        simple_formatter = logging.Formatter("[%(levelname)s] %(message)s")
+        debug_formatter = logging.Formatter("[%(levelname)s] [%(name)s:%(funcName)s] %(message)s")
+
+        # Set verbosity and formatting
+        if verbosity == 0:
+            self.logger.setLevel(logging.ERROR)
+            H.setFormatter(simple_formatter)
+        elif verbosity == 1:
+            self.logger.setLevel(logging.INFO)
+            H.setFormatter(simple_formatter)
+        elif verbosity == 2:
+            self.logger.setLevel(logging.DEBUG)
+            H.setFormatter(debug_formatter)
+        else:
+            raise ValueError("Verbosity must be 0, 1 or 2.")
+
+        self.logger.addHandler(H)
+
     def initialize_presentation(self):
         """ Initialize a presentation from scratch. Sets the self._prs and self._slides attributes."""
 
@@ -132,9 +160,8 @@ class PowerPointReport():
         if self.template is None:
             self.set_size(self.size)  # size is not set if template was given
 
-        # Get ready to add slides   
+        # Get ready to add slides
         self._slides = []   # a list of SlidePlus objects
-
 
     def set_size(self, size):
         """
@@ -250,6 +277,10 @@ class PowerPointReport():
         # Create slide(s)
         for slide_content in content:
 
+            # How many slides are already in the presentation?
+            n_slides = len(self._slides)
+            self.logger.info("Adding slide {}".format(n_slides + 1))
+
             # Setup an empty slide
             slide = self.setup_slide(slide_layout)
             slide.add_parameters(parameters)
@@ -257,6 +288,7 @@ class PowerPointReport():
 
             # Glob files
             slide._content = glob_files(slide_content)  # internal extension of content
+            self.logger.debug("Final content: {}".format(slide._content))
 
             # Set title of slide
             slide.set_title(title)
@@ -277,6 +309,8 @@ class PowerPointReport():
         slide_obj = self._prs.slides.add_slide(layout_obj)
 
         slide = Slide(slide_obj)
+        slide.logger = self.logger
+
         slide._slide_height = self._prs.slide_height
         slide._slide_width = self._prs.slide_width
         self._slides.append(slide)
@@ -300,9 +334,9 @@ class PowerPointReport():
                     box.remove_border()
 
     def get_config(self, full=False):
-        """ 
-        Return a dictionary with the configuration of the presentation 
-        
+        """
+        Return a dictionary with the configuration of the presentation
+
         Parameters
         ----------
         full : bool, default False
@@ -330,7 +364,7 @@ class PowerPointReport():
         for slide in self._slides:
             slide_config = {}
             for key, value in slide.__dict__.items():
-                if not key.startswith("_"):
+                if not key.startswith("_") and key != "logger":  # ignore private attributes
                     slide_config[key] = slide.__dict__[key]
 
                     if full is False:
@@ -348,17 +382,17 @@ class PowerPointReport():
 
         config = self.get_config()
 
-        #Get pretty printed config
+        # Get pretty printed config
         pp = pprint.PrettyPrinter(compact=True, sort_dicts=False, width=120)
         config_json = pp.pformat(config)
         config_json = replace_quotes(config_json)
-        config_json = re.sub("\"\n\s+\"", "", config_json)  # strings are not allowed to split over multiple lines
-        
+        config_json = re.sub(r"\"\n\s+\"", "", config_json)  # strings are not allowed to split over multiple lines
+
         with open(filename, "w") as f:
             f.write(config_json)
 
     def from_config(self, config):
-        """ 
+        """
         Fill a presentation from a configuration dictionary.
 
         Parameters
@@ -374,9 +408,9 @@ class PowerPointReport():
                     config = json.load(f)
                 except Exception as e:
                     raise ValueError("Could not load config file from {}. The error was: {}".format(config, e))
-        
+
         # Set upper attributes
-        upper_keys = config.keys() 
+        upper_keys = config.keys()
         for key in upper_keys:
             if key != "slides":
                 setattr(self, key, config[key])
@@ -388,7 +422,7 @@ class PowerPointReport():
         for slide_dict in config["slides"]:
             self.add_slide(**slide_dict)  # add all options from slide config
 
-    def save(self, filename, show_borders=False):
+    def save(self, filename, show_borders=False, pdf=True):
         """
         Save the presentation to a file.
 
@@ -398,16 +432,55 @@ class PowerPointReport():
             Filename of the presentation.
         show_borders : bool, default False
             Show borders of the content boxes. Is useful for debugging layouts.
+        pdf : bool, default True
+            Additionally save the presentation as a pdf file with the same basename as <filename>.
         """
 
         if show_borders is True:
             self.add_borders()
+
+        self.logger.info("Saving presentation to '" + filename + "'")
+
+        # Warning if filename does nto end with .pptx
+        if not filename.endswith(".pptx"):
+            self.logger.warning("Filename does not end with '.pptx'. This might cause problems when opening the presentation.")
 
         self._prs.save(filename)
 
         # Remove borders again
         if show_borders is True:
             self.remove_borders()  # Remove borders again
+
+        # Save presentation as pdf
+        if pdf:
+
+            self.logger.info("Additionally saving presentation as .pdf")
+
+            # Check if libreoffice is installed
+            is_installed = False
+            try:
+                self.logger.debug("Checking if libreoffice is installed...")
+                result = subprocess.run(["libreoffice", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                self.logger.debug("Version of libreoffice: " + result.stdout.rstrip())
+                is_installed = True
+
+            except FileNotFoundError:
+                self.logger.error("Option 'pdf' is set to True, but LibreOffice could not be found on path. Please install LibreOffice to save presentations as pdf.")
+
+            # Save presentation as pdf
+            if is_installed:
+
+                outdir = os.path.dirname(filename)
+                outdir = "." if outdir == "" else outdir  # outdir cannot be empty
+
+                cmd = f"libreoffice --headless --invisible --convert-to pdf --outdir {outdir} {filename}"
+                self.logger.debug("Running command: " + cmd)
+
+                process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                while process.poll() is None:
+                    line = process.stdout.readline().rstrip()
+                    if line != "":
+                        self.logger.debug("Command output: " + line)
 
 
 # ------------------------------------------------------------------------------
@@ -419,12 +492,17 @@ class Slide():
 
         self._slide = slide  # Slide object from python-pptx
         self._boxes = []   # Boxes in the slide
+        self.logger = None
 
     def set_title(self, title):
         """ Set the title of the slide. """
 
         if title is not None:
-            self._slide.shapes.title.text = title
+
+            if self._slide.shapes.title is None:
+                self.logger.warning("Could not set title of slide. The slide does not have a title box.")
+            else:
+                self._slide.shapes.title.text = title
 
     def add_parameters(self, parameters):
         """ Add parameters to the slide. """
@@ -563,6 +641,7 @@ class Slide():
         """
 
         box = Box(self._slide, coordinates)
+        box.logger = self.logger  # share logger with box
         self._boxes.append(box)
 
     def fill_boxes(self):
@@ -588,6 +667,7 @@ class Box():
         """
 
         self.slide = slide
+        self.logger = None
 
         # Bounds of the box
         self.left = int(coordinates[0])
@@ -679,15 +759,14 @@ class Box():
             t = type(content)
             raise ValueError(f"Content of type '{t}' cannot be added to slide")
 
-    @staticmethod
-    def convert_pdf(pdf):
+    def convert_pdf(self, pdf):
         """ Convert a pdf file to a png file. """
 
         # Create temporary file
         temp_name = next(tempfile._get_candidate_names()) + ".png"
         temp_dir = tempfile.gettempdir()
         temp_file = os.path.join(temp_dir, temp_name)
-        #print(temp_file)
+        self.logger.debug(f"Converting pdf to temporary png at: {temp_file}")
 
         # Convert pdf to png
         doc = fitz.open(pdf)
@@ -705,6 +784,7 @@ class Box():
         self._adjust_image_position()  # adjust image position to middle of box
 
         # Add image
+        self.logger.debug("Adding image to slide from file: " + filename)
         self.picture = self.slide.shapes.add_picture(filename, self.content_left, self.content_top, self.content_width, self.content_height)
 
     def _adjust_image_size(self, filename):

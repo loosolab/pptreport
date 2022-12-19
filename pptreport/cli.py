@@ -3,13 +3,17 @@ import argparse
 from pptreport import __version__ as pptreport_version
 from pptreport.classes import PowerPointReport
 
+
 def main():
 
     # Parse args
     parser = argparse.ArgumentParser("pptreport")
-    parser.add_argument("--config", help="Path to config file in json format, e.g. config.json", required=True)
-    parser.add_argument("--output", help="Path to output file, e.g. presentation.pptx", required=True)
-    parser.add_argument("--template", help="Path to template ppt file (optional). Will overwrite any template specified in config file.")
+    parser.add_argument("--config", metavar="<path>", help="Path to configuration file in json format, e.g. config.json", required=True)
+    parser.add_argument("--output", metavar="<path>", help="Path to output file, e.g. presentation.pptx", required=True)
+    parser.add_argument("--template", metavar="<path>", help="Path to template ppt file (optional). Will overwrite any template specified in config file.")
+    parser.add_argument("--pdf", help="Additionally save the presentation as a .pdf with the same basename as --output. Requires 'Libreoffice' to be installed on path (Default: False).", action='store_true', default=False)
+    parser.add_argument("--show-borders", help="Show borders around all elements in the presentation. Good for debugging layouts (Default: False).", action='store_true', default=False)
+    parser.add_argument("--verbosity", metavar="0/1/2", help="Verbosity level for logging (0-2). 0 = only errors, 1 = minimal logging, 2 = debug logging (Default: 1).", type=int, default=1)
     parser.add_argument("--version", action="version", version=pptreport_version)
 
     # If no args, print help
@@ -33,12 +37,12 @@ def main():
         config_dict["template"] = args.template
 
     # Create report using PowerPointReport class
-    print("Building report...")
-    report = PowerPointReport()
+    report = PowerPointReport(verbosity=args.verbosity)
     report.from_config(config_dict)
-    report.save(args.output)
+    report.save(args.output, show_borders=args.show_borders, pdf=args.pdf)
 
-    print(f"Report saved to {args.output}")
+    report.logger.info("pptreport finished!")
+
 
 if __name__ == "__main__":
     main()
