@@ -1,4 +1,4 @@
-{"size": "standard",
+{"template": "template.pptx",
  "slides": [{"title": "An automatically generated presentation", "slide_layout": 0},
             {"content": ["content/lion.jpg"], "title": "A lion"},
             {"content": ["content/dog.jpg", "content/cat.jpg"], "title": "Pets"},
