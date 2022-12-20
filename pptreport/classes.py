@@ -241,8 +241,8 @@ class PowerPointReport():
             List of content to be added to the slide. Can be either a path to a file or a string.
         title : str, optional
             Title of the slide.
-        slide_layout : int, default 1
-            Layout of the slide.
+        slide_layout : int or str, default 1
+            Layout of the slide. If an integer, it is the index of the layout. If a string, it is the name of the layout.
         content_layout : str, default "grid"
             Layout of the slide. Can be "grid", "vertical" or "horizontal". Can also be an array of integers indicating the layout of the slide.
         outer_margin : float, default 2
@@ -305,7 +305,22 @@ class PowerPointReport():
     def setup_slide(self, slide_layout):
         """ Initialize an empty slide with a given layout. """
 
-        layout_obj = self._prs.slide_layouts[slide_layout]
+        # Get layout object from presentation
+        if isinstance(slide_layout, int):
+            try:
+                layout_obj = self._prs.slide_layouts[slide_layout]
+            except IndexError:
+                n_layouts = len(self._prs.slide_layouts)
+                raise IndexError(f"Layout index {slide_layout} not found in slide master. The number of slide layouts is {n_layouts} (the maximum index is {n_layouts-1})")
+
+        elif isinstance(slide_layout, str):
+            try:
+                layout_obj = self._prs.slide_layouts.get_by_name(slide_layout)
+            except KeyError:
+                raise KeyError(f"Layout named '{slide_layout}' not found in slide master.")
+        else:
+            raise TypeError("Layout should be an integer or a string.")
+
         slide_obj = self._prs.slides.add_slide(layout_obj)
 
         slide = Slide(slide_obj)
