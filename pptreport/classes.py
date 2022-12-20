@@ -226,6 +226,10 @@ class PowerPointReport():
                   content_layout="grid",
                   outer_margin=2,
                   inner_margin=1,
+                  left_margin=None,
+                  right_margin=None,
+                  top_margin=None,
+                  bottom_margin=None,
                   n_columns=2,
                   width_ratios=None,
                   height_ratios=None,
@@ -249,6 +253,10 @@ class PowerPointReport():
             Outer margin of the slide (in cm).
         inner_margin : float, default 1
             Inner margin of the slide elements (in cm).
+        left_margin / right_margin : float, optional
+            Left and right margin of the slide elements (in cm). Can be used to overwrite outer_margin for left/right/both dependent on which are given.
+        top_margin / bottom_margin : float, optional
+            Top and bottom margin of the slide elements (in cm). Can be used to overwrite outer_margin for top/bottom/both dependent on which are given.
         n_columns : int, default 2
             Number of columns in the layout in case of "grid" layout.
         width_ratios : list of float, optional
@@ -593,26 +601,32 @@ class Slide():
         layout_matrix = self._layout_matrix
         nrows, ncols = layout_matrix.shape
 
-        # Convert margins from cm to pptx units
-        outer_margin_unit = Cm(self.outer_margin)
-        inner_margin_unit = Cm(self.inner_margin)
-        left_margin = right_margin = outer_margin_unit
-        top_margin = bottom_margin = outer_margin_unit
+        # Establish left/right/top/bottom margins (in cm)
+        left_margin = self.outer_margin if self.left_margin is None else self.left_margin
+        right_margin = self.outer_margin if self.right_margin is None else self.right_margin
+        top_margin = self.outer_margin if self.top_margin is None else self.top_margin
+        bottom_margin = self.outer_margin if self.bottom_margin is None else self.bottom_margin
 
-        # Add to top margin based on title
+        # Convert margins from cm to pptx units
+        left_margin_unit = Cm(left_margin)
+        right_margin_unit = Cm(right_margin)
+        top_margin_unit = Cm(top_margin)
+        bottom_margin_unit = Cm(bottom_margin)
+        inner_margin_unit = Cm(self.inner_margin)
+
+        # Add to top margin based on size of title
         if self._slide.shapes.title.text != "":
-            top_margin = self._slide.shapes.title.top + self._slide.shapes.title.height + outer_margin_unit
-        else:
-            top_margin = outer_margin_unit
-            sp = self._slide.shapes.title.element
-            sp.getparent().remove(sp)
+            top_margin_unit = self._slide.shapes.title.top + self._slide.shapes.title.height + top_margin_unit
+        # else:
+        #    sp = self._slide.shapes.title.element
+        #    sp.getparent().remove(sp) # remove title box if title is empty
 
         # How many columns and rows are there?
         n_rows, n_cols = layout_matrix.shape
 
         # Get total height and width of pictures
-        total_width = self._slide_width - left_margin - right_margin - (n_cols - 1) * inner_margin_unit
-        total_height = self._slide_height - top_margin - bottom_margin - (n_rows - 1) * inner_margin_unit
+        total_width = self._slide_width - left_margin_unit - right_margin_unit - (n_cols - 1) * inner_margin_unit
+        total_height = self._slide_height - top_margin_unit - bottom_margin_unit - (n_rows - 1) * inner_margin_unit
 
         # Get column widths and row heights
         if self.width_ratios is None:
@@ -636,8 +650,8 @@ class Slide():
 
             # Get upper left corner of box
             row, col = coordinates[0]
-            left = left_margin + np.sum(widths[:col]) + col * inner_margin_unit
-            top = top_margin + np.sum(heights[:row]) + row * inner_margin_unit
+            left = left_margin_unit + np.sum(widths[:col]) + col * inner_margin_unit
+            top = top_margin_unit + np.sum(heights[:row]) + row * inner_margin_unit
 
             # Get total width and height of box (can span multiple columns and rows)
             width = 0
