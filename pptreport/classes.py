@@ -432,7 +432,7 @@ class PowerPointReport():
         for slide_dict in config["slides"]:
             self.add_slide(**slide_dict)  # add all options from slide config
 
-    def save(self, filename, show_borders=False, pdf=True):
+    def save(self, filename, show_borders=False, pdf=False):
         """
         Save the presentation to a file.
 
@@ -442,7 +442,7 @@ class PowerPointReport():
             Filename of the presentation.
         show_borders : bool, default False
             Show borders of the content boxes. Is useful for debugging layouts.
-        pdf : bool, default True
+        pdf : bool, default False
             Additionally save the presentation as a pdf file with the same basename as <filename>.
         """
 
