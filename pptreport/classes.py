@@ -117,17 +117,48 @@ class PowerPointReport():
         """ Initialize a presentation object using an existing presentation (template) or from scratch (default) """
 
         self.template = template
-
         if template is None:
             self.size = size
 
+        self.global_parameters = None
         self.setup_logger(verbosity)
 
         self.logger.info("Initializing presentation")
         self.initialize_presentation()
 
+        # Default slide parameters
+        self._default_slide_parameters = {
+            "content": [],
+            "title": None,
+            "slide_layout": 1,
+            "content_layout": "grid",
+            "outer_margin": 2,
+            "inner_margin": 1,
+            "left_margin": None,
+            "right_margin": None,
+            "top_margin": None,
+            "bottom_margin": None,
+            "n_columns": 2,
+            "width_ratios": None,
+            "height_ratios": None,
+            "notes": None,
+            "split": False
+        }
+
     def setup_logger(self, verbosity=1):
-        """ Setup a logger for the class in self.logger """
+        """
+        Setup a logger for the class.
+
+        Parameters
+        ----------
+        verbosity : int, default 1
+            The verbosity of the logger. 0: ERROR, 1: INFO, 2: DEBUG
+
+        Returns
+        -------
+        None
+            self.logger is set.
+        """
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -162,6 +193,23 @@ class PowerPointReport():
 
         # Get ready to add slides
         self._slides = []   # a list of Slide objects
+
+    def add_global_parameters(self, parameters):
+        """ Add global parameters to the presentation """
+
+        # Test that parameters is a dict
+        if not isinstance(parameters, dict):
+            raise TypeError("Parameters must be a dict.")
+
+        # Save parameters to self
+        self.global_parameters = parameters  # for writing to config file
+
+        # Overwrite default parameters
+        for k, v in parameters.items():
+            if k not in self._default_slide_parameters:
+                raise ValueError(f"Parameter '{k}' is not a valid parameter for slide.")
+            else:
+                self._default_slide_parameters[k] = v
 
     def set_size(self, size):
         """
@@ -220,21 +268,21 @@ class PowerPointReport():
                 slide.placeholders[1].text = subtitle
 
     def add_slide(self,
-                  content=[],
+                  content=None,
                   title=None,
-                  slide_layout=1,
-                  content_layout="grid",
-                  outer_margin=2,
-                  inner_margin=1,
+                  slide_layout=None,
+                  content_layout=None,
+                  outer_margin=None,
+                  inner_margin=None,
                   left_margin=None,
                   right_margin=None,
                   top_margin=None,
                   bottom_margin=None,
-                  n_columns=2,
+                  n_columns=None,
                   width_ratios=None,
                   height_ratios=None,
                   notes=None,
-                  split=False,
+                  split=None
                   ):
         """
         Add a slide to the presentation.
@@ -269,18 +317,32 @@ class PowerPointReport():
             Split the content into multiple slides.
         """
 
-        # Get all parameters
+        # Get input parameters
         parameters = locals()
+        parameters = {k: v for k, v in parameters.items() if v is not None}
+        parameters.pop("self")
+        self.logger.debug(f"Input parameters: {parameters}")
+
+        # If input was None, replace with default parameters
+        for key, default_value in self._default_slide_parameters.items():
+            if key not in parameters:
+                parameters[key] = default_value
+
+        self.logger.debug("Final slide parameters: {}".format(parameters))
 
         # Establish content
+        content = parameters["content"]
         if isinstance(content, str):
             content = [content]
 
         # If split is false, content should be contained in one slide
-        if split is False:
+        if parameters["split"] is False:
             content = [content]
         else:
-            content = glob_files(content)
+            if len(content) == 0:
+                raise ValueError("Split is True, but content is empty.")
+            else:
+                content = glob_files(content)
 
         # Create slide(s)
         for slide_content in content:
@@ -290,16 +352,18 @@ class PowerPointReport():
             self.logger.info("Adding slide {}".format(n_slides + 1))
 
             # Setup an empty slide
-            slide = self.setup_slide(slide_layout)
+            slide = self.setup_slide(parameters["slide_layout"])
+
+            # Add parameters to slide
             slide.add_parameters(parameters)
-            slide.content = slide_content
+            slide.content = slide_content  # this is the original content string/list given by the user
 
             # Glob files
             slide._content = glob_files(slide_content)  # internal extension of content
             self.logger.debug("Final content: {}".format(slide._content))
 
             # Set title of slide
-            slide.set_title(title)
+            slide.set_title()
 
             # Add content to slide
             if len(slide_content) > 0:
@@ -329,13 +393,18 @@ class PowerPointReport():
         else:
             raise TypeError("Layout should be an integer or a string.")
 
+        # Add slide to python-pptx presentation
         slide_obj = self._prs.slides.add_slide(layout_obj)
 
+        # Add slide to list of slides in internal object
         slide = Slide(slide_obj)
         slide.logger = self.logger
 
+        # Add information from presentation to slide
+        slide._default_parameters = self._default_slide_parameters
         slide._slide_height = self._prs.slide_height
         slide._slide_width = self._prs.slide_width
+
         self._slides.append(slide)
 
         return slide
@@ -379,12 +448,12 @@ class PowerPointReport():
                 if value is not None:  # 'template' can for example be None if no template is used
                     config[key] = value
 
-        # Get default slide config
-        defaults = get_default_args(self.add_slide)
-
         # Get config of each slide
         config["slides"] = []
         for slide in self._slides:
+
+            defaults = slide._default_parameters  # Get default slide parameters
+
             slide_config = {}
             for key, value in slide.__dict__.items():
                 if not key.startswith("_") and key != "logger":  # ignore private attributes and logger
@@ -450,6 +519,10 @@ class PowerPointReport():
 
         # Initialize presentation
         self.initialize_presentation()
+
+        # Set global slide parameters
+        if "global_parameters" in config:
+            self.add_global_parameters(config["global_parameters"])
 
         # Fill in slides with information from slide config
         for slide_dict in config["slides"]:
@@ -527,15 +600,15 @@ class Slide():
         self._boxes = []   # Boxes in the slide
         self.logger = None
 
-    def set_title(self, title):
-        """ Set the title of the slide. """
+    def set_title(self):
+        """ Set the title of the slide. Requires self.title to be set. """
 
-        if title is not None:
+        if self.title is not None:
 
             if self._slide.shapes.title is None:
                 self.logger.warning("Could not set title of slide. The slide does not have a title box.")
             else:
-                self._slide.shapes.title.text = title
+                self._slide.shapes.title.text = self.title
 
     def add_parameters(self, parameters):
         """ Add parameters to the slide. """
