@@ -161,7 +161,7 @@ class PowerPointReport():
             self.set_size(self.size)  # size is not set if template was given
 
         # Get ready to add slides
-        self._slides = []   # a list of SlidePlus objects
+        self._slides = []   # a list of Slide objects
 
     def set_size(self, size):
         """
