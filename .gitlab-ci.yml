@@ -43,6 +43,8 @@ lint:
     # temporary workaround for version import setup.cfg
     - flake8 pptreport --ignore=E501,W503 --extend-exclude=pptreport/__init__.py
   allow_failure: false
+  rules:
+    - when: always
 
 #Test notebooks when code is pushed to main
 notebooks:
