@@ -59,7 +59,7 @@ notebooks:
     - conda activate pptreport
     - python -m ipykernel install --user --name pptreport
     - cd examples
-    - papermill --log-output write_report.ipynb -k pptreport
+    - papermill --log-output write_report.ipynb out.ipynb -k pptreport
   rules:
     - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
 
