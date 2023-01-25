@@ -57,6 +57,7 @@ notebooks:
     - conda install -c conda-forge mamba
     - mamba env create -f pptreport_env.yml --force #mamba is faster at creating envs than conda
     - conda init bash
+    - source ~/.bashrc
     - conda activate pptreport
     - python -m ipykernel install --user --name pptreport
     - cd examples
