@@ -1,0 +1,12 @@
+name: pptreport
+channels:
+    - bioconda
+    - conda-forge
+dependencies:
+  - python==3.9.15 #pin due to issue in python-pptx #13
+  - notebook
+  - pip
+  - pip:
+    - -e ".[all]" # install pptreport from local repository, has to be in current directory!
+  - ipykernel # needed to register environment as jupyter kernel
+

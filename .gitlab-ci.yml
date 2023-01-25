@@ -1,0 +1,80 @@
+# This file is a template, and might need editing before it works on your project.
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
+
+# Official language image. Look for the different tagged releases at:
+# https://hub.docker.com/r/library/python/tags/
+image: python:3.9.15  #pin due to issue in python-pptx #13
+
+# Change pip's cache directory to be inside the project directory since we can
+# only cache local items.
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# Pip's cache doesn't store the python packages
+# https://pip.pypa.io/en/stable/topics/caching/
+#
+# If you want to also cache the installed packages, you have to install
+# them in a virtualenv and cache it as well.
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+default:
+  before_script:
+    - python --version  # For debugging
+    - pip install virtualenv
+    - virtualenv venv
+    - source venv/bin/activate
+    - apt update
+    - pip install .[all]
+
+# flake8 ignore rules:
+# E501 = Line too long
+# W503 = Line break occurred before a binary operator
+
+lint:
+  script:
+    - pip install flake8
+    # ignore __init__.py from linting because of "F401 '._version.__version__' imported but unused"
+    # temporary workaround for version import setup.cfg
+    - flake8 pptreport --ignore=E501,W503 --extend-exclude=pptreport/__init__.py
+  allow_failure: false
+
+#Test notebooks when code is pushed to main
+notebooks:
+  image: continuumio/miniconda3:latest
+  tags:
+    - gwdg
+    - gwdg-shared
+  inherit:
+    default: false  #do not install virtual env for this job
+  script:
+    - pip install papermill
+    - conda install -c conda-forge mamba
+    - mamba env create -f pptreport_env.yml --force #mamba is faster at creating envs than conda
+    - conda activate pptreport
+    - python -m ipykernel install --user --name pptreport
+    - cd examples
+    - papermill --log-output write_report.ipynb -k pptreport
+  rules:
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
+
+# no pages yet
+#pages:
+#  script:
+#    - apt-get update -qq && apt-get install -qq -y pandoc
+#    - pip install sphinx sphinx-rtd-theme
+#    - pip install nbsphinx
+#    - pip install nbsphinx_link 
+#    - cd docs
+#    - make html
+#    - mv build/html/ ../public/
+#  artifacts:
+#    paths:
+#      - public
+#  rules:
+#    - if: $CI_COMMIT_BRANCH == "dev"
