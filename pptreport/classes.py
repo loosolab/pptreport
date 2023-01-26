@@ -21,7 +21,7 @@ import matplotlib.font_manager
 from pptx import Presentation
 from pptx.util import Cm, Pt
 from pptx.enum.shapes import MSO_SHAPE
-from pptx.enum.text import MSO_AUTO_SIZE, MSO_ANCHOR
+from pptx.enum.text import MSO_AUTO_SIZE, MSO_ANCHOR, PP_ALIGN
 from pptx.dml.color import RGBColor
 
 ###############################################################################
@@ -132,6 +132,7 @@ class PowerPointReport():
             "title": None,
             "slide_layout": 1,
             "content_layout": "grid",
+            "content_alignment": "center",
             "outer_margin": 2,
             "inner_margin": 1,
             "left_margin": None,
@@ -272,6 +273,7 @@ class PowerPointReport():
                   title=None,
                   slide_layout=None,
                   content_layout=None,
+                  content_alignment=None,
                   outer_margin=None,
                   inner_margin=None,
                   left_margin=None,
@@ -297,6 +299,9 @@ class PowerPointReport():
             Layout of the slide. If an integer, it is the index of the layout. If a string, it is the name of the layout.
         content_layout : str, default "grid"
             Layout of the slide. Can be "grid", "vertical" or "horizontal". Can also be an array of integers indicating the layout of the slide.
+        content_alignment : str, default "center"
+            Alignment of the content. Can be combinations of "upper", "lower", "left", "right" and "center". Examples: "upper left", "center", "lower right".
+            The default is "center", which will align the content centered both vertically and horizontally.
         outer_margin : float, default 2
             Outer margin of the slide (in cm).
         inner_margin : float, default 1
@@ -356,6 +361,7 @@ class PowerPointReport():
 
             # Add parameters to slide
             slide.add_parameters(parameters)
+            slide.format_parameters()
             slide.content = slide_content  # this is the original content string/list given by the user
 
             # Glob files
@@ -617,6 +623,27 @@ class Slide():
             if key != "self":
                 setattr(self, key, parameters[key])
 
+    def format_parameters(self):
+        """ Checks and formats specific parameters to the correct type. """
+
+        # Format "n_columns" to int
+        if hasattr(self, "n_columns"):
+            try:
+                self.n_columns = int(self.n_columns)
+            except ValueError:
+                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{self.n_columns}'. Please use an integer.")
+
+        # Format "split" to bool
+        if hasattr(self, "split"):
+            if isinstance(self.split, str):
+
+                if self.split.lower() in ["true", "1", "t", "y", "yes"]:
+                    self.split = True
+                elif self.split.lower() in ["false", "0", "f", "n", "no"]:
+                    self.split = False
+                else:
+                    raise ValueError(f"Could not convert 'split' parameter to bool. The given value is: '{self.split}'. Please use 'True' or 'False'.")
+
     def add_notes(self):
         """ Add notes to the slide. """
 
@@ -754,13 +781,20 @@ class Slide():
 
         box = Box(self._slide, coordinates)
         box.logger = self.logger  # share logger with box
+
+        # Add specific parameters to box
+        keys = ["content_alignment"]
+        parameters = {key: getattr(self, key) for key in keys}
+        box.add_parameters(parameters)
+
+        # Add box object to list
         self._boxes.append(box)
 
     def fill_boxes(self):
         """ Fill the boxes with the elements in self.content """
 
         for i, element in enumerate(self._content):
-            self._boxes[i].fill(element)
+            self._boxes[i].fill(element, box_index=i)
 
 
 class Box():
@@ -796,6 +830,12 @@ class Box():
 
         self.border = None  # border object of the box
 
+    def add_parameters(self, parameters):
+        """ Add parameters from the slide """
+
+        for key, value in parameters.items():
+            setattr(self, key, value)
+
     def add_border(self):
         """ Adds a border shape of box to make debugging easier """
 
@@ -812,7 +852,7 @@ class Box():
             self.border._sp.getparent().remove(self.border._sp)
             self.border = None  # reset border
 
-    def fill(self, content):
+    def fill(self, content, box_index=0):
         """
         Fill the box with content. The function estimates type of content is given.
 
@@ -820,8 +860,11 @@ class Box():
         ----------
         content : str
             The element to be added to the box.
+        box_index : int
+            The index of the box (used for accessing properties per box).
         """
 
+        self.box_index = box_index
         self.content = content
 
         # Find out what type of content it is
@@ -845,6 +888,8 @@ class Box():
 
         else:
             pass
+
+        self.logger.debug(f"Box index {box_index} was filled with {content_type}")
 
     @staticmethod
     def _get_content_type(content):
@@ -929,11 +974,60 @@ class Box():
             self.content_width = box_height * im_width / im_height  # maintain aspect ratio
             self.content_height = box_height
 
+    def _get_content_alignment(self):
+        """ Get the content alignment for this box. """
+
+        self.logger.debug(f"Getting content alignment for box '{self.box_index}'. Input content alignment is '{self.content_alignment}'")
+
+        if isinstance(self.content_alignment, str):  # if content alignment is a string, use it for all boxes
+            this_alignment = self.content_alignment
+
+        elif isinstance(self.content_alignment, list):  # if content alignment is a list, use the alignment for the current box
+            if self.box_index > len(self.content_alignment) - 1:  # if box index is out of range, use default alignment
+                this_alignment = "center"  # default alignment
+            else:
+                this_alignment = self.content_alignment[self.box_index]
+        else:
+            raise ValueError(f"Content alignment '{self.content_alignment}' is not valid. Valid content alignments are: str or list of str")
+
+        # Check if current alignment is valid
+        valid_alignments = ["left", "right", "center", "lower", "upper",
+                            "lower left", "lower center", "lower right",
+                            "upper left", "upper center", "upper right",
+                            "center left", "center center", "center right"]
+
+        if this_alignment.lower() not in valid_alignments:
+            raise ValueError(f"Alignment '{self.content_alignment}' is not valid. Valid content alignments are: {valid_alignments}")
+
+        # Expand into the structure "<vertical> <horizontal>"
+        if this_alignment.lower() in ["left", "right", "center"]:
+            this_alignment = "center " + this_alignment
+        elif this_alignment.lower() in ["lower", "upper"]:
+            this_alignment = this_alignment + " center"
+
+        return this_alignment.split(" ")
+
     def _adjust_image_position(self):
         """ Adjust the position of the image to be in the middle of the box. """
 
-        self.content_left = self.left + (self.width - self.content_width) / 2
-        self.content_top = self.top + (self.height - self.content_height) / 2
+        # Get content alignment for this box
+        vertical, horizontal = self._get_content_alignment()
+
+        # Adjust image position vertically
+        if vertical == "upper":
+            self.content_top = self.top
+        elif vertical == "lower":
+            self.content_top = self.top + self.height - self.content_height
+        elif vertical == "center":
+            self.content_top = self.top + (self.height - self.content_height) / 2
+
+        # Adjust image position horizontally
+        if horizontal == "left":
+            self.content_left = self.left
+        elif horizontal == "right":
+            self.content_left = self.left + self.width - self.content_width
+        elif horizontal == "center":
+            self.content_left = self.left + (self.width - self.content_width) / 2
 
     def fill_text(self, text):
         """
@@ -947,13 +1041,30 @@ class Box():
 
         txt_box = self.slide.shapes.add_textbox(self.left, self.top, self.width, self.height)
         txt_frame = txt_box.text_frame
+        txt_frame.word_wrap = True
 
-        txt_frame.add_paragraph()
+        # Place all text in one paragraph
+        # txt_frame.add_paragraph() # text_frame already has one paragraph
         p = txt_frame.paragraphs[0]
         p.text = text
-        txt_frame.word_wrap = True
-        txt_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
 
-        # Try to fit text to the box
+        # Try to fit text size to the box
         resize_text(txt_frame)
         txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE  # An additional step of resizing text to fit the box
+
+        # Set alignment of text in textbox
+        vertical, horizontal = self._get_content_alignment()
+
+        if vertical == "upper":
+            txt_frame.vertical_anchor = MSO_ANCHOR.TOP
+        elif vertical == "lower":
+            txt_frame.vertical_anchor = MSO_ANCHOR.BOTTOM
+        elif vertical == "center":
+            txt_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+
+        if horizontal == "left":
+            p.alignment = PP_ALIGN.LEFT
+        elif horizontal == "right":
+            p.alignment = PP_ALIGN.RIGHT
+        elif horizontal == "center":
+            p.alignment = PP_ALIGN.CENTER
