@@ -66,6 +66,7 @@ The example file at [examples/report_config.json](examples/report_config.json) g
 | template |  string | This is the path to an optional template to use for the presentation, for example to use a specific slide design. The presentation is initialized with the slides of the presentation. In order to use the slide master exclusively, delete all slides from the presentation. | "mytemplate.pptx" |
 | size | string or list of length 2| If template is not given, size controls the size of the presentation. Can be "standard" (default), "widescreen", "a4-portait", "a4-landscape". Can also be a list of two numbers indicating [height, width] in cm, e.g. [21, 14.8] for A5 size. | "standard"
 | slides | list of dictionaries | This key contains a list of configuration dictionaries. Each dictionary corresponds to one slide in the presentation. | See configuration of slide keys below. |  
+| global_parameters | dictionary | A dictionary containing slide keys (see below), which will be global across all slides. These will be overwritten by any specific configuration given per slide. | {"inner_margin": 0} |
 
 <br />
 <br />
