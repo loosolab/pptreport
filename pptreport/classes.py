@@ -82,7 +82,7 @@ def glob_files(lst):
 
     # Return files to content in the correct order
     for idx, string in zip(file_locations, file_list):
-        content[idx] = file_list
+        content[idx] = string
 
     return content
 
