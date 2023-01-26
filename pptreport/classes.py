@@ -9,6 +9,7 @@ import re
 import subprocess
 import logging
 import sys
+from natsort import natsorted
 
 # For reading pictures
 from PIL import Image
@@ -56,15 +57,32 @@ def glob_files(lst):
         lst = [lst]
 
     content = []  # flattened list of files
+    files = []  # names of files in the list
     for element in lst:
         if "*" in element:
             globbed = glob.glob(element)
             if len(globbed) > 0:
-                content.extend(globbed)
+                for file in globbed:
+                    files.append(file)
+                    content.append(file)
             else:
                 raise ValueError(f"No files could be found for pattern: '{element}'")
         else:
             content.append(element)
+
+    # Get the locations of files in the list
+    file_locations = []
+    for i, string in enumerate(content):
+        if string in files:
+            file_locations.append(i)
+
+    # Sort files using natural sorting
+    file_list = [content[i] for i in file_locations]
+    file_list = natsorted(file_list)
+
+    # Return files to content in the correct order
+    for idx, string in zip(file_locations, file_list):
+        content[idx] = string
 
     return content
 
