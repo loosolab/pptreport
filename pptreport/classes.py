@@ -147,6 +147,7 @@ class PowerPointReport():
         # Default slide parameters
         self._default_slide_parameters = {
             "content": [],
+            "grouped_content": [],
             "title": None,
             "slide_layout": 1,
             "content_layout": "grid",
@@ -288,6 +289,7 @@ class PowerPointReport():
 
     def add_slide(self,
                   content=None,
+                  grouped_content=None,
                   title=None,
                   slide_layout=None,
                   content_layout=None,
@@ -311,6 +313,8 @@ class PowerPointReport():
         ----------
         content : list of str
             List of content to be added to the slide. Can be either a path to a file or a string.
+        grouped_content : list of str
+            List of grouped content to be added to the slide. The groups are identified by the regex groups of each element in the list.
         title : str, optional
             Title of the slide.
         slide_layout : int or str, default 1
@@ -345,6 +349,10 @@ class PowerPointReport():
         parameters = {k: v for k, v in parameters.items() if v is not None}
         parameters.pop("self")
         self.logger.debug(f"Input parameters: {parameters}")
+
+        # Establish if content or grouped_content was given
+        if "content" in parameters and "grouped_content" in parameters:
+            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
 
         # If input was None, replace with default parameters
         for key, default_value in self._default_slide_parameters.items():

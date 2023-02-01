@@ -59,6 +59,9 @@
              "content_alignment": ["upper left", "upper center", "upper right", "center left", "center", "center right",
                                    "lower left", "lower center", "lower right"],
              "n_columns": 3},
+            {"title": "Grouped content using regex groups", "slide_layout": 0},
+            {"grouped_content": ["content/colored_animals/(*)_blue.png", "content/colored_animals/(*)_yellow.png", "content/colored_animals/(*)_red.png"],
+             "n_columns": 3}
             {"title": "Testing custom layouts", "slide_layout": 2},
             {"content": ["content/mandarin_fish.jpg", "content/clown_fish.jpg", "content/blue_tang_fish.jpg",
                          "content/zebra_fish.png"],
