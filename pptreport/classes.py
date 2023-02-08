@@ -87,6 +87,20 @@ def glob_files(lst):
     return content
 
 
+def glob_regex(pattern):
+    """ Glob files using a regex pattern """
+    pass
+
+
+def get_files_in_dir(directory):
+    """ Get all files in the given directory including the path prefix """
+
+    files = os.listdir(directory)
+    files = [os.path.join(directory, file) for file in files]
+
+    return files
+
+
 def replace_quotes(string):
     """ Replace single quotes with double quotes in a string (such as from the pprint utility to make a valid json file) """
 
@@ -352,7 +366,8 @@ class PowerPointReport():
 
         # Establish if content or grouped_content was given
         if "content" in parameters and "grouped_content" in parameters:
-            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
+            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")        
+        use_grouped = True if "grouped_content" in parameters else False
 
         # If input was None, replace with default parameters
         for key, default_value in self._default_slide_parameters.items():
@@ -361,55 +376,125 @@ class PowerPointReport():
 
         self.logger.debug("Final slide parameters: {}".format(parameters))
 
-        # Establish content
-        content = parameters["content"]
-        if isinstance(content, str):
-            content = [content]
+        # Add slides dependent on content type
+        if use_grouped:
 
-        # If split is false, content should be contained in one slide
-        if parameters["split"] is False:
-            content = [content]
-        else:
-            if len(content) == 0:
-                raise ValueError("Split is True, but content is empty.")
-            else:
-                content = glob_files(content)
-                if isinstance(parameters["split"], int):
-                    content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
+            raw_content = parameters["grouped_content"]
 
-        # Create slide(s)
-        for slide_content in content:
+            # Search for regex groups
+            group_content = {}  # dict of lists of content input
+            for i, pattern in enumerate(raw_content):
+                group_content[i] = {}
 
-            # How many slides are already in the presentation?
-            n_slides = len(self._slides)
-            self.logger.info("Adding slide {}".format(n_slides + 1))
+                self.logger.debug(f"Finding files for pattern: {pattern}")
 
-            # Setup an empty slide
-            slide = self.setup_slide(parameters["slide_layout"])
+                # Establish folder and all files in it
+                dirname = os.path.dirname(pattern)
+                dirname = "." if dirname == "" else dirname
+                files = get_files_in_dir(dirname)
 
-            # Add parameters to slide
-            slide.add_parameters(parameters)
-            slide.format_parameters()
-            slide.content = slide_content  # this is the original content string/list given by the user
+                # Find all files that match the regex
+                try:
+                    pattern_compiled = re.compile(pattern)
+                except re.error:
+                    raise ValueError(f"Invalid regex: {pattern}")
 
-            # Glob files
-            slide._content = glob_files(slide_content)  # internal extension of content
-            self.logger.debug("Final content: {}".format(slide._content))
+                # Find all files that match the regex
+                for fil in files:
 
-            # Set title of slide
-            slide.set_title()
+                    m = pattern_compiled.match(fil)
+                    if m:  # if there was a match
 
-            # Add content to slide
-            if len(slide_content) > 0:
-                slide.set_layout_matrix()  # Find the layout of the slide
+                        groups = m.groups()
+                        if len(groups) == 0:
+                            raise ValueError(f"Regex {pattern} does not contain any groups.")
+                        elif len(groups) > 1:
+                            raise ValueError(f"Regex {pattern} contains more than one group.")
+                        group = groups[0]
+
+                        # Save the file to the group
+                        group_content[i][group] = fil
+
+            # Collect all groups found
+            all_regex_groups = sum([list(d.keys()) for d in group_content.values()], [])  # flatten list of lists
+            all_regex_groups = natsorted(set(all_regex_groups))
+            self.logger.debug(f"Found groups: {all_regex_groups}")
+
+            # If no groups were found for an element, add strings for each group
+            for i in group_content:
+                if len(group_content[i]) == 0:
+                    for group in all_regex_groups:
+                        group_content[i][group] = raw_content[i]
+
+            # Convert from group per element to element per group
+            content_per_group = {group: [group_content[i].get(group, None) for i in group_content] for group in all_regex_groups}
+
+            # Create one slide per group
+            for group, content in content_per_group.items():
+
+                slide = self.setup_slide(parameters["slide_layout"])
+                slide.add_parameters(parameters)
+
+                slide.title = f"Group: {group}" if slide.title is None else slide.title
+                slide.set_title()
+
+                # Fill boxes with content
+                slide._content = content
+                slide.set_layout_matrix()
                 slide.create_boxes()       # Create boxes based on layout
                 slide.fill_boxes()         # Fill boxes with content
 
-            # Add notes to slide
-            slide.add_notes()
+        else:
+
+            # Establish content
+            content = parameters["content"]
+            if isinstance(content, str):
+                content = [content]
+
+            # If split is false, content should be contained in one slide
+            if parameters["split"] is False:
+                content = [content]
+            else:
+                if len(content) == 0:
+                    raise ValueError("Split is True, but content is empty.")
+                else:
+                    content = glob_files(content)
+                    if isinstance(parameters["split"], int):
+                        content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
+
+            # Create slide(s)
+            for slide_content in content:
+
+                # Setup an empty slide
+                slide = self.setup_slide(parameters["slide_layout"])
+
+                # Add parameters to slide
+                slide.add_parameters(parameters)
+                slide.format_parameters()
+                slide.content = slide_content  # this is the original content string/list given by the user
+
+                # Glob files
+                slide._content = glob_files(slide_content)  # internal extension of content
+                self.logger.debug("Final content: {}".format(slide._content))
+
+                # Set title of slide
+                slide.set_title()
+
+                # Add content to slide
+                if len(slide_content) > 0:
+                    slide.set_layout_matrix()  # Find the layout of the slide
+                    slide.create_boxes()       # Create boxes based on layout
+                    slide.fill_boxes()         # Fill boxes with content
+
+                # Add notes to slide
+                slide.add_notes()
 
     def setup_slide(self, slide_layout):
         """ Initialize an empty slide with a given layout. """
+
+        # How many slides are already in the presentation?
+        n_slides = len(self._slides)
+        self.logger.info("Adding slide {}".format(n_slides + 1))
 
         # Get layout object from presentation
         if isinstance(slide_layout, int):
@@ -914,6 +999,9 @@ class Box():
         elif content_type == "text":
             self.fill_text(content)
 
+        elif content_type == "empty":
+            return # do nothing
+
         else:
             pass
 
@@ -940,6 +1028,8 @@ class Box():
                         return "image"
             else:
                 return "text"
+        elif content is None:
+            return "empty"
         else:
             t = type(content)
             raise ValueError(f"Content of type '{t}' cannot be added to slide")
