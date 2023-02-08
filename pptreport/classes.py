@@ -340,8 +340,8 @@ class PowerPointReport():
             Height of the rows in case of "grid" layout.
         notes : str, optional
             Notes for the slide. Can be either a path to a text file or a string.
-        split : bool, default False
-            Split the content into multiple slides.
+        split : bool or int, default False
+            Split the content into multiple slides. If True, the content will be split into one-slide-per-element. If an integer, the content will be split into slides with that many elements per slide.
         """
 
         # Get input parameters
@@ -374,6 +374,8 @@ class PowerPointReport():
                 raise ValueError("Split is True, but content is empty.")
             else:
                 content = glob_files(content)
+                if isinstance(parameters["split"], int):
+                    content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
 
         # Create slide(s)
         for slide_content in content:
