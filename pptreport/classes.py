@@ -918,9 +918,9 @@ class Box():
             if self.show_filename:
                 text_height = 20
                 self.height = text_height
-                self.fill_text(content)
+                self.fill_text(content, True)
                 self.height = full_height - text_height
-                self.top = self.top + (text_height * 2)
+                self.top = self.top + text_height
             self.fill_image(content)
 
         elif content_type == "textfile":
@@ -1074,7 +1074,7 @@ class Box():
         elif horizontal == "center":
             self.content_left = self.left + (self.width - self.content_width) / 2
 
-    def fill_text(self, text):
+    def fill_text(self, text, force_bottom=False):
         """
         Fill the box with text.
 
@@ -1100,12 +1100,15 @@ class Box():
         # Set alignment of text in textbox
         vertical, horizontal = self._get_content_alignment()
 
-        if vertical == "upper":
-            txt_frame.vertical_anchor = MSO_ANCHOR.TOP
-        elif vertical == "lower":
+        if force_bottom:
             txt_frame.vertical_anchor = MSO_ANCHOR.BOTTOM
-        elif vertical == "center":
-            txt_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+        else:
+            if vertical == "upper":
+                txt_frame.vertical_anchor = MSO_ANCHOR.TOP
+            elif vertical == "lower":
+                txt_frame.vertical_anchor = MSO_ANCHOR.BOTTOM
+            elif vertical == "center":
+                txt_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
 
         if horizontal == "left":
             p.alignment = PP_ALIGN.LEFT
