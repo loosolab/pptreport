@@ -161,7 +161,8 @@ class PowerPointReport():
             "width_ratios": None,
             "height_ratios": None,
             "notes": None,
-            "split": False
+            "split": False,
+            "show_filename": False
         }
 
     def setup_logger(self, verbosity=1):
@@ -229,6 +230,7 @@ class PowerPointReport():
                 raise ValueError(f"Parameter '{k}' is not a valid parameter for slide.")
             else:
                 self._default_slide_parameters[k] = v
+
 
     def set_size(self, size):
         """
@@ -302,7 +304,8 @@ class PowerPointReport():
                   width_ratios=None,
                   height_ratios=None,
                   notes=None,
-                  split=None
+                  split=None,
+                  show_filename=None
                   ):
         """
         Add a slide to the presentation.
@@ -664,6 +667,17 @@ class Slide():
                 else:
                     raise ValueError(f"Could not convert 'split' parameter to bool. The given value is: '{self.split}'. Please use 'True' or 'False'.")
 
+        # Format "show_filename" to bool
+        if hasattr(self, "show_filename"):
+            if isinstance(self.show_filename, str):
+
+                if self.show_filename.lower() in ["true", "1", "t", "y", "yes"]:
+                    self.show_filename = True
+                elif self.show_filename.lower() in ["false", "0", "f", "n", "no"]:
+                    self.show_filename = False
+                else:
+                    raise ValueError(f"Could not convert 'show_filename' parameter to bool. The given value is: '{self.show_filename}'. Please use 'True' or 'False'.")
+
     def add_notes(self):
         """ Add notes to the slide. """
 
@@ -734,6 +748,8 @@ class Slide():
         bottom_margin_unit = Cm(bottom_margin)
         inner_margin_unit = Cm(self.inner_margin)
 
+        show_filename = self.show_filename
+
         # Add to top margin based on size of title
         if self._slide.shapes.title.text != "":
             top_margin_unit = self._slide.shapes.title.top + self._slide.shapes.title.height + top_margin_unit
@@ -743,7 +759,7 @@ class Slide():
 
         # How many columns and rows are there?
         n_rows, n_cols = layout_matrix.shape
-
+    
         # Get total height and width of pictures
         total_width = self._slide_width - left_margin_unit - right_margin_unit - (n_cols - 1) * inner_margin_unit
         total_height = self._slide_height - top_margin_unit - bottom_margin_unit - (n_rows - 1) * inner_margin_unit
@@ -787,9 +803,9 @@ class Slide():
             width += (len(cols) - 1) * inner_margin_unit  # add inner margins between columns
 
             #  Create box
-            self.add_box((left, top, width, height))
+            self.add_box((left, top, width, height), show_filename)
 
-    def add_box(self, coordinates):
+    def add_box(self, coordinates, show_filename):
         """
         Add a box to the slide.
 
@@ -799,7 +815,7 @@ class Slide():
             Coordinates containing (left, top, width, height) of the box (in pptx units).
         """
 
-        box = Box(self._slide, coordinates)
+        box = Box(self._slide, coordinates, show_filename)
         box.logger = self.logger  # share logger with box
 
         # Add specific parameters to box
@@ -820,7 +836,7 @@ class Slide():
 class Box():
     """ A box is a constrained area of the slide which contains a single element e.g. text, a picture, a table, etc. """
 
-    def __init__(self, slide, coordinates):
+    def __init__(self, slide, coordinates, show_filename):
         """
         Initialize a box.
 
@@ -840,6 +856,8 @@ class Box():
         self.top = int(coordinates[1])
         self.width = int(coordinates[2])
         self.height = int(coordinates[3])
+
+        self.show_filename = show_filename
 
         # Initialize bounds of the content (can be smaller than the box)
         self.content = None
@@ -896,6 +914,14 @@ class Box():
             os.remove(filename)
 
         elif content_type == "image":
+            full_height = self.height
+
+            if self.show_filename:
+                text_height = 20
+                self.height = text_height
+                self.fill_text(content)
+                self.height = full_height - text_height
+                self.top = self.top + (text_height * 2)
             self.fill_image(content)
 
         elif content_type == "textfile":
