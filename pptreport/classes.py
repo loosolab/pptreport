@@ -668,9 +668,20 @@ class Slide():
         """ Add notes to the slide. """
 
         if self.notes is not None:
-            if os.path.exists(self.notes):
+            if isinstance(self.notes, list):
+                notes_string = ''
+                for s in self.notes:
+                    if os.path.exists(s):
+                        with open(s, 'r') as f:
+                            notes_string += f'\n{f.read()}'
+                    else:
+                        notes_string += f'\n{s}'
+                notes_string = notes_string.lstrip()  # remove leading newline
+
+            elif os.path.exists(self.notes):
                 with open(self.notes, "r") as f:
                     notes_string = f.read()
+
             else:
                 notes_string = self.notes
 
