@@ -758,7 +758,7 @@ class Slide():
 
         # How many columns and rows are there?
         n_rows, n_cols = layout_matrix.shape
-    
+
         # Get total height and width of pictures
         total_width = self._slide_width - left_margin_unit - right_margin_unit - (n_cols - 1) * inner_margin_unit
         total_height = self._slide_height - top_margin_unit - bottom_margin_unit - (n_rows - 1) * inner_margin_unit
