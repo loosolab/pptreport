@@ -231,7 +231,6 @@ class PowerPointReport():
             else:
                 self._default_slide_parameters[k] = v
 
-
     def set_size(self, size):
         """
         Set the size of the presentation.
