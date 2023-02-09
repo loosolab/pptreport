@@ -676,9 +676,12 @@ class Slide():
                             notes_string += f'\n{f.read()}'
                     else:
                         notes_string += f'\n{s}'
+                notes_string = notes_string.lstrip()  # remove leading newline
+
             elif os.path.exists(self.notes):
                 with open(self.notes, "r") as f:
                     notes_string = f.read()
+
             else:
                 notes_string = self.notes
 
