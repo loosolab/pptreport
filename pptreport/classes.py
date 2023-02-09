@@ -145,6 +145,8 @@ class PowerPointReport():
             "split": False
         }
 
+        self.config_dict = {}  # configuration dictionary
+
     def setup_logger(self, verbosity=1):
         """
         Setup a logger for the class.
@@ -210,6 +212,14 @@ class PowerPointReport():
                 raise ValueError(f"Parameter '{k}' is not a valid parameter for slide.")
             else:
                 self._default_slide_parameters[k] = v
+
+    def add_to_config(self, parameters):
+        """ Add the slide parameters to the config file """
+
+        if "slides" not in self.config_dict:
+            self.config_dict["slides"] = []
+
+        self.config_dict["slides"].append(parameters)
 
     def set_size(self, size):
         """
@@ -327,7 +337,7 @@ class PowerPointReport():
         for key, default_value in self._default_slide_parameters.items():
             if key not in parameters:
                 parameters[key] = default_value
-
+        self.add_to_config(parameters)
         self.logger.debug("Final slide parameters: {}".format(parameters))
 
         # Establish content
@@ -479,7 +489,7 @@ class PowerPointReport():
     def write_config(self, filename):
         """ Write the configuration of the presentation to a json-formatted file. """
 
-        config = self.get_config()
+        config = self.config_dict  # self.get_config()
 
         # Get pretty printed config
         pp = pprint.PrettyPrinter(compact=True, sort_dicts=False, width=120)
