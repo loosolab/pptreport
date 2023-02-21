@@ -51,11 +51,12 @@ tests:
   script:
     - pip install pytest
     - pip install pytest-cov
-    - pytest --cov-report=term --cov=./pptreport . --junitxml=pytest.xml    
+    - pytest --cov-report=term --cov=pptreport  --junitxml=pytest.xml --cov-report html:htmlcov .
   artifacts:
     when: always
     paths:
       - pytest.xml
+      - htmlcov
     reports:
       junit: pytest.xml
   rules:
