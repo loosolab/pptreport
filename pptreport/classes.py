@@ -145,8 +145,6 @@ class PowerPointReport():
             "split": False
         }
 
-        self.config_dict = {}  # configuration dictionary
-
     def setup_logger(self, verbosity=1):
         """
         Setup a logger for the class.
@@ -189,12 +187,21 @@ class PowerPointReport():
 
         self._prs = Presentation(self.template)
 
+        # Get ready to collect configuration
+        self.config_dict = {}  # configuration dictionary
+
         # Set size of the presentation (if not given by a template)
         if self.template is None:
             self.set_size(self.size)  # size is not set if template was given
 
         # Get ready to add slides
         self._slides = []   # a list of Slide objects
+
+        # Add info to config dict
+        if self.template is not None:
+            self.config_dict["template"] = self.template
+        else:
+            self.config_dict["size"] = self.size
 
     def add_global_parameters(self, parameters):
         """ Add global parameters to the presentation """
@@ -212,6 +219,9 @@ class PowerPointReport():
                 raise ValueError(f"Parameter '{k}' is not a valid parameter for slide.")
             else:
                 self._default_slide_parameters[k] = v
+
+        # Add to internal config dict
+        self.config_dict["global_parameters"] = parameters
 
     def add_to_config(self, parameters):
         """ Add the slide parameters to the config file """
@@ -437,7 +447,7 @@ class PowerPointReport():
 
     def get_config(self, full=False):
         """
-        Return a dictionary with the configuration of the presentation
+        Collect a dictionary with the configuration of the presentation
 
         Parameters
         ----------
@@ -450,46 +460,46 @@ class PowerPointReport():
             Dictionary with the configuration of the presentation.
         """
 
-        # Collect upper-level config of presentation
-        config = {}
-        for key in self.__dict__:
-            if key[0] != "_" and key != "logger":  # ignore private attributes and logger
-                value = self.__dict__[key]
-                if value is not None:  # 'template' can for example be None if no template is used
-                    config[key] = value
+        # Read parameters from internal config_dict
+        config = self.config_dict.copy()
 
-        # Get config of each slide
-        config["slides"] = []
-        for slide in self._slides:
+        # Get default slide parameters
+        defaults = self._default_slide_parameters
 
-            defaults = slide._default_parameters  # Get default slide parameters
+        # Resolve configuration of each slide
+        for slide_config in config.get("slides", []):
+            for key in list(slide_config.keys()):  # list to prevent RuntimeError: dictionary changed size during iteration
+                value = slide_config[key]
 
-            slide_config = {}
-            for key, value in slide.__dict__.items():
-                if not key.startswith("_") and key != "logger":  # ignore private attributes and logger
-                    value = slide.__dict__[key]
+                # convert bool to str to make it json-compatible
+                if isinstance(value, bool):
+                    value_converted = str(value)  # convert bool to str to make it json-compatible
+                else:
+                    value_converted = value
+                slide_config[key] = value_converted
 
-                    if isinstance(value, bool):
-                        value_converted = str(value)  # convert bool to str to make it json-compatible
-                    else:
-                        value_converted = value
-
-                    slide_config[key] = value_converted
-
-                    if full is False:
-                        if value == defaults[key]:
-                            del slide_config[key]
-                        elif isinstance(value, list) and len(value) == 0:  # content can be an empty list
-                            del slide_config[key]
-
-            config["slides"].append(slide_config)
+                # Remove default values if full is False
+                if full is False:
+                    if value == defaults[key]:  # compares to the unconverted value
+                        del slide_config[key]
+                    elif isinstance(value, list) and len(value) == 0:  # content can be an empty list
+                        del slide_config[key]
 
         return config
 
-    def write_config(self, filename):
-        """ Write the configuration of the presentation to a json-formatted file. """
+    def write_config(self, filename, full=False):
+        """
+        Write the configuration of the presentation to a json-formatted file.
 
-        config = self.config_dict  # self.get_config()
+        Parameters
+        ----------
+        filename : str
+            Path to the file to write the configuration to.
+        full : bool, default False
+            If True, write the full configuration of the presentation. If False, only write the non-default values.
+        """
+
+        config = self.get_config(full=full)
 
         # Get pretty printed config
         pp = pprint.PrettyPrinter(compact=True, sort_dicts=False, width=120)
