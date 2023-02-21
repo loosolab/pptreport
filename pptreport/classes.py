@@ -506,6 +506,7 @@ class PowerPointReport():
         config_json = pp.pformat(config)
         config_json = replace_quotes(config_json)
         config_json = re.sub(r"\"\n\s+\"", "", config_json)  # strings are not allowed to split over multiple lines
+        config_json = re.sub(r": None", ": null", config_json)  # Convert to null as None is not allowed in json
 
         with open(filename, "w") as f:
             f.write(config_json)
