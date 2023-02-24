@@ -1,3 +1,6 @@
+[![coverage main](https://gitlab.gwdg.de/loosolab/software/pptreport/badges/main/coverage.svg)](https://gitlab.gwdg.de/loosolab/software/pptreport/-/commits/main)
+[![coverage dev](https://gitlab.gwdg.de/loosolab/software/pptreport/badges/dev/coverage.svg)](https://gitlab.gwdg.de/loosolab/software/pptreport/-/commits/dev)
+
 # pptreport - automatic creation of powerpoint presentations
 
 The pptreport package is a tool for building powerpoint presentations using a configuration file of content such as pictures and text, or step-by-step during a script or jupyter notebook. 
