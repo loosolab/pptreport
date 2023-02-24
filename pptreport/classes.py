@@ -100,6 +100,13 @@ def get_files_in_dir(directory):
 
     return files
 
+def fill_dict(d1, d2):
+    """ Fill the keys of d1 with the values of d2 if they are not already present in d1 """
+
+    for key, value in d2.items():
+        if key not in d1:
+            d1[key] = value
+
 
 def replace_quotes(string):
     """ Replace single quotes with double quotes in a string (such as from the pprint utility to make a valid json file) """
@@ -156,7 +163,7 @@ class PowerPointReport():
         self.setup_logger(verbosity)
 
         self.logger.info("Initializing presentation")
-        self.initialize_presentation()
+        self._initialize_presentation()
 
         # Default slide parameters
         self._default_slide_parameters = {
@@ -216,7 +223,7 @@ class PowerPointReport():
 
         self.logger.addHandler(H)
 
-    def initialize_presentation(self):
+    def _initialize_presentation(self):
         """ Initialize a presentation from scratch. Sets the self._prs and self._slides attributes."""
 
         self._prs = Presentation(self.template)
@@ -362,87 +369,27 @@ class PowerPointReport():
         parameters = locals()
         parameters = {k: v for k, v in parameters.items() if v is not None}
         parameters.pop("self")
+        parameters = self._check_slide_input(parameters)
         self.logger.debug(f"Input parameters: {parameters}")
 
-        # Establish if content or grouped_content was given
-        if "content" in parameters and "grouped_content" in parameters:
-            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")        
-        use_grouped = True if "grouped_content" in parameters else False
-
         # If input was None, replace with default parameters
-        for key, default_value in self._default_slide_parameters.items():
-            if key not in parameters:
-                parameters[key] = default_value
-
+        fill_dict(parameters, self._default_slide_parameters)
         self.logger.debug("Final slide parameters: {}".format(parameters))
 
+        # Format content in parameters
+
+
         # Add slides dependent on content type
-        if use_grouped:
+        if "grouped_content" in parameters:
 
-            raw_content = parameters["grouped_content"]
-
-            # Search for regex groups
-            group_content = {}  # dict of lists of content input
-            for i, pattern in enumerate(raw_content):
-                group_content[i] = {}
-
-                self.logger.debug(f"Finding files for pattern: {pattern}")
-
-                # Establish folder and all files in it
-                dirname = os.path.dirname(pattern)
-                dirname = "." if dirname == "" else dirname
-                files = get_files_in_dir(dirname)
-
-                # Find all files that match the regex
-                try:
-                    pattern_compiled = re.compile(pattern)
-                except re.error:
-                    raise ValueError(f"Invalid regex: {pattern}")
-
-                # Find all files that match the regex
-                for fil in files:
-
-                    m = pattern_compiled.match(fil)
-                    if m:  # if there was a match
-
-                        groups = m.groups()
-                        if len(groups) == 0:
-                            raise ValueError(f"Regex {pattern} does not contain any groups.")
-                        elif len(groups) > 1:
-                            raise ValueError(f"Regex {pattern} contains more than one group.")
-                        group = groups[0]
-
-                        # Save the file to the group
-                        group_content[i][group] = fil
-
-            # Collect all groups found
-            all_regex_groups = sum([list(d.keys()) for d in group_content.values()], [])  # flatten list of lists
-            all_regex_groups = natsorted(set(all_regex_groups))
-            self.logger.debug(f"Found groups: {all_regex_groups}")
-
-            # If no groups were found for an element, add strings for each group
-            for i in group_content:
-                if len(group_content[i]) == 0:
-                    for group in all_regex_groups:
-                        group_content[i][group] = raw_content[i]
-
-            # Convert from group per element to element per group
-            content_per_group = {group: [group_content[i].get(group, None) for i in group_content] for group in all_regex_groups}
+            content_per_group = self._get_paired_content(parameters["grouped_content"])
 
             # Create one slide per group
             for group, content in content_per_group.items():
-
-                slide = self.setup_slide(parameters["slide_layout"])
-                slide.add_parameters(parameters)
-
+                slide = self._setup_slide(parameters)
                 slide.title = f"Group: {group}" if slide.title is None else slide.title
-                slide.set_title()
-
-                # Fill boxes with content
-                slide._content = content
-                slide.set_layout_matrix()
-                slide.create_boxes()       # Create boxes based on layout
-                slide.fill_boxes()         # Fill boxes with content
+                self._content = content
+                slide._fill_slide()
 
         else:
 
@@ -466,19 +413,16 @@ class PowerPointReport():
             for slide_content in content:
 
                 # Setup an empty slide
-                slide = self.setup_slide(parameters["slide_layout"])
+                slide = self._setup_slide(parameters)
+                slide._content = glob_files(slide_content) # internal extension of content
+                slide._fill_slide()  # Fill slide with content
 
                 # Add parameters to slide
-                slide.add_parameters(parameters)
-                slide.format_parameters()
-                slide.content = slide_content  # this is the original content string/list given by the user
+                #slide.add_parameters(parameters)
+                #slide.format_parameters()
+                #slide.content = slide_content  # this is the original content string/list given by the user
 
-                # Glob files
-                slide._content = glob_files(slide_content)  # internal extension of content
-                self.logger.debug("Final content: {}".format(slide._content))
-
-                # Set title of slide
-                slide.set_title()
+                #self.logger.debug("Final content: {}".format(slide._content))
 
                 # Add content to slide
                 if len(slide_content) > 0:
@@ -489,7 +433,16 @@ class PowerPointReport():
                 # Add notes to slide
                 slide.add_notes()
 
-    def setup_slide(self, slide_layout):
+    def _check_slide_input(self, parameters):
+        """ Check the format of the input parameters for the slide and return an updated dictionary. """
+
+        # Establish if content or grouped_content was given
+        if "content" in parameters and "grouped_content" in parameters:
+            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
+
+        return parameters
+
+    def _setup_slide(self, parameters):
         """ Initialize an empty slide with a given layout. """
 
         # How many slides are already in the presentation?
@@ -497,6 +450,7 @@ class PowerPointReport():
         self.logger.info("Adding slide {}".format(n_slides + 1))
 
         # Get layout object from presentation
+        slide_layout = parameters.get("slide_layout", 0)
         if isinstance(slide_layout, int):
             try:
                 layout_obj = self._prs.slide_layouts[slide_layout]
@@ -516,7 +470,7 @@ class PowerPointReport():
         slide_obj = self._prs.slides.add_slide(layout_obj)
 
         # Add slide to list of slides in internal object
-        slide = Slide(slide_obj)
+        slide = Slide(slide_obj, parameters)
         slide.logger = self.logger
 
         # Add information from presentation to slide
@@ -527,6 +481,70 @@ class PowerPointReport():
         self._slides.append(slide)
 
         return slide
+
+    def _get_paired_content(self, raw_content):
+        """ Get content per group from a list of regex patterns. 
+        
+        Parameters
+        ----------
+        raw_content : list of str
+            List of regex patterns. Each pattern should contain one group.
+
+        Returns
+        -------
+        content_per_group : dict
+            Dictionary with group names as keys and lists of content as values.
+        """
+
+        # Search for regex groups
+        group_content = {}  # dict of lists of content input
+        for i, pattern in enumerate(raw_content):
+            group_content[i] = {}
+
+            self.logger.debug(f"Finding files for pattern: {pattern}")
+
+            # Establish folder and all files in it
+            dirname = os.path.dirname(pattern)
+            dirname = "." if dirname == "" else dirname
+            files = get_files_in_dir(dirname)
+
+            # Find all files that match the regex
+            try:
+                pattern_compiled = re.compile(pattern)
+            except re.error:
+                raise ValueError(f"Invalid regex: {pattern}")
+
+            # Find all files that match the regex
+            for fil in files:
+
+                m = pattern_compiled.match(fil)
+                if m:  # if there was a match
+
+                    groups = m.groups()
+                    if len(groups) == 0:
+                        raise ValueError(f"Regex {pattern} does not contain any groups.")
+                    elif len(groups) > 1:
+                        raise ValueError(f"Regex {pattern} contains more than one group.")
+                    group = groups[0]
+
+                    # Save the file to the group
+                    group_content[i][group] = fil
+
+        # Collect all groups found
+        all_regex_groups = sum([list(d.keys()) for d in group_content.values()], [])  # flatten list of lists
+        all_regex_groups = natsorted(set(all_regex_groups))
+        self.logger.debug(f"Found groups: {all_regex_groups}")
+
+        # If no groups were found for an element, add strings for each group
+        for i in group_content:
+            if len(group_content[i]) == 0:
+                for group in all_regex_groups:
+                    group_content[i][group] = raw_content[i]
+
+        # Convert from group per element to element per group
+        content_per_group = {group: [group_content[i].get(group, None) for i in group_content] for group in all_regex_groups}pass
+
+        return content_per_group
 
     def add_borders(self):
         """ Add borders of all content boxes. Useful for debugging layouts."""
@@ -713,11 +731,25 @@ class PowerPointReport():
 class Slide():
     """ An internal class for creating slides. """
 
-    def __init__(self, slide):
+    def __init__(self, slide, parameters={}):
 
         self._slide = slide  # Slide object from python-pptx
-        self._boxes = []   # Boxes in the slide
+        self._boxes = []     # Boxes in the slide
         self.logger = None
+
+        self.add_parameters(parameters)
+        slide.format_parameters()
+
+    def _fill_slide(self):
+        """ Fill the slide with content from the internal variables """
+
+        self.set_title()
+
+        # Fill boxes with content
+        if len(self._content) > 0:
+            self.set_layout_matrix()
+            self.create_boxes()       # Create boxes based on layout
+            self.fill_boxes()         # Fill boxes with content
 
     def set_title(self):
         """ Set the title of the slide. Requires self.title to be set. """
@@ -730,7 +762,7 @@ class Slide():
                 self._slide.shapes.title.text = self.title
 
     def add_parameters(self, parameters):
-        """ Add parameters to the slide. """
+        """ Add parameters to the slide as internal variables. """
 
         for key in parameters:
             if key != "self":
@@ -881,7 +913,7 @@ class Slide():
 
             #  Create box
             self.add_box((left, top, width, height))
-
+    
     def add_box(self, coordinates):
         """
         Add a box to the slide.
@@ -1000,7 +1032,7 @@ class Box():
             self.fill_text(content)
 
         elif content_type == "empty":
-            return # do nothing
+            return  # do nothing
 
         else:
             pass
