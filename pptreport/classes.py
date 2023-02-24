@@ -102,7 +102,13 @@ def get_files_in_dir(directory):
 
 
 def fill_dict(d1, d2):
-    """ Fill the keys of d1 with the values of d2 if they are not already present in d1 """
+    """ Fill the keys of d1 with the values of d2 if they are not already present in d1.
+
+    Returns
+    --------
+    None
+        d1 is updated in place.
+    """
 
     for key, value in d2.items():
         if key not in d1:
@@ -307,6 +313,10 @@ class PowerPointReport():
         self._prs.slide_height = h
         self._prs.slide_width = w
 
+    # ------------------------------------------------------ #
+    # ------------- Functions for adding slides ------------ #
+    # ------------------------------------------------------ #
+
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
         Add a title slide to the presentation.
@@ -390,16 +400,16 @@ class PowerPointReport():
         parameters = locals()
         parameters = {k: v for k, v in parameters.items() if v is not None}
         parameters.pop("self")
-        parameters = self._check_slide_input(parameters)
+        parameters = self._check_add_slide_input(parameters)
         self.logger.debug(f"Input parameters: {parameters}")
 
-        # If input was None, replace with default parameters
+        # If input was None, replace with default parameters from upper presentation
         fill_dict(parameters, self._default_slide_parameters)
         self.add_to_config(parameters)
         self.logger.debug("Final slide parameters: {}".format(parameters))
 
-        # Format content in parameters
-        # self.format_parameters()
+        # Check validity of parameters before creating slides
+        parameters = Slide.format_parameters(parameters)
 
         # Add slides dependent on content type
         if "grouped_content" in parameters:
@@ -410,43 +420,59 @@ class PowerPointReport():
             for group, content in content_per_group.items():
                 slide = self._setup_slide(parameters)
                 slide.title = f"Group: {group}" if slide.title is None else slide.title
-                self._content = content
+                slide.content = content
                 slide._fill_slide()
 
         else:
 
-            # self.expand_content():
-
-            # Establish content
-            content = parameters["content"]
-            if isinstance(content, str):
-                content = [content]
-
-            # If split is false, content should be contained in one slide
-            if parameters["split"] is False:
-                content = [content]
-            else:
-                if len(content) == 0:
-                    raise ValueError("Split is True, but content is empty.")
-                else:
-                    content = glob_files(content)
-                    if isinstance(parameters["split"], int):
-                        content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
+            content = self._get_content(parameters)
 
             # Create slide(s)
-            for slide_content in content:
+            for slide_content in parameters["content"]:
 
                 # Setup an empty slide
                 slide = self._setup_slide(parameters)
-                slide._content = glob_files(slide_content)  # internal extension of content
+                slide.content = slide_content
                 slide._fill_slide()  # Fill slide with content
 
-    def _check_slide_input(self, parameters):
+    def _check_add_slide_input(self, parameters):
         """ Check the format of the input parameters for the slide and return an updated dictionary. """
 
         # Establish if content or grouped_content was given
         if "content" in parameters and "grouped_content" in parameters:
             raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
+
+
+        # If split is given, content should be given
+        content = parameters.get("content", [])
+        if parameters.get("split", False) is not False and (parameters.get("content", []) not in parameters or parameters["content"] is None):
+            raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
+
+        return parameters
+
+    def format_slide_parameters(self, parameters):
+        """ Format and expand the input parameters for the slide. """
+
+        # Establish content
+        content = parameters["content"]
+        if isinstance(content, str):
+            content = [content]
+
+        # Expand content
+        content = glob_files(content)
+
+        # If split is false, content should be contained in one slide
+        if parameters["split"] is False:
+            content = [content]
+        else:
+            if len(content) == 0:
+                raise ValueError("Split is True, but 'content' is empty.")
+            else:
+                content = glob_files(content)
+                if isinstance(parameters["split"], int):
+                    content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
+
+        parameters["content"] = content
 
         return parameters
 
@@ -489,6 +515,9 @@ class PowerPointReport():
         self._slides.append(slide)
 
         return slide
+
+    def _get_content(self, parameters):
+
 
     def _get_paired_content(self, raw_content):
         """ Get content per group from a list of regex patterns.
@@ -554,6 +583,10 @@ class PowerPointReport():
 
         return content_per_group
 
+    # ------------------------------------------------------------------------ #
+    # --------------------- Additional elements on slides -------------------- #
+    # ------------------------------------------------------------------------ #
+
     def add_borders(self):
         """ Add borders of all content boxes. Useful for debugging layouts."""
 
@@ -569,6 +602,10 @@ class PowerPointReport():
             if hasattr(slide, "_boxes"):
                 for box in slide._boxes:
                     box.remove_border()
+
+    # ------------------------------------------------------------------------ #
+    # --------------------- Saving / loading presentations ---------------------
+    # ------------------------------------------------------------------------ #
 
     def get_config(self, full=False):
         """
@@ -664,7 +701,7 @@ class PowerPointReport():
                     self.split = bool(config[key])  # convert input string to bool
 
         # Initialize presentation
-        self.initialize_presentation()
+        self._initialize_presentation()
 
         # Set global slide parameters
         if "global_parameters" in config:
@@ -746,9 +783,74 @@ class Slide():
         self._boxes = []     # Boxes in the slide
         self.logger = None
 
+        parameters = self.format_parameters(parameters)
         self.add_parameters(parameters)
-        slide.format_parameters()
 
+    @staticmethod
+    def format_parameters(parameters):
+        """ Checks and formats specific slide parameters to the correct type. """
+
+        parameters = parameters.copy()  # Make a copy to not change the original dict
+
+        # Format "n_columns" to int
+        if "n_columns" in parameters:  # hasattr(self, "n_columns"):
+            try:
+                parameters["n_columns"] = int(parameters["n_columns"])
+            except ValueError:
+                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
+
+        # Format "split" to bool
+        if "split" in parameters:
+            split = parameters["split"]
+            if isinstance(split, str):
+                if split.lower() in ["true", "1", "t", "y", "yes"]:
+                    parameters["split"] = True
+                elif split.lower() in ["false", "0", "f", "n", "no"]:
+                    parameters["split"] = False
+                else:
+                    raise ValueError(f"Could not convert 'split' parameter to bool. The given value is: '{split}'. Please use 'True' or 'False'.")
+
+    def add_parameters(self, parameters):
+        """ Add parameters to the slide as internal variables. """
+
+        for key in parameters:
+            if key != "self":
+                setattr(self, key, parameters[key])
+
+    def set_layout_matrix(self):
+        """ Get the content layout matrix for the slide. """
+
+        # Get variables from self
+        layout = self.content_layout
+        n_elements = len(self.content)
+        n_columns = self.n_columns
+
+        # Get layout matrix depending on "layout" variable
+        if layout == "grid":
+            n_columns = min(n_columns, n_elements)  # number of columns cannot be larger than number of elements
+            n_rows = int(np.ceil(n_elements / n_columns))  # number of rows to fit elements
+            n_total = n_rows * n_columns
+
+            intarray = list(range(n_elements))
+            intarray.extend([np.nan] * (n_total - n_elements))
+
+            layout_matrix = np.array(intarray).reshape((n_rows, n_columns))
+
+        elif layout == "vertical":
+            layout_matrix = np.array(list(range(n_elements))).reshape((n_elements, 1))
+
+        elif layout == "horizontal":
+            layout_matrix = np.array(list(range(n_elements))).reshape((1, n_elements))
+
+        else:
+            try: 
+                layout_matrix = np.array(layout)
+            except ValueError:
+                raise ValueError(f"Could not convert 'layout' parameter to numpy array. The given value is: '{layout}'. Please use a valid layout matrix.")
+
+        self._layout_matrix = layout_matrix
+
+    # -------------------  Fill slide with content  ------------------- #
     def _fill_slide(self):
         """ Fill the slide with content from the internal variables """
 
@@ -756,7 +858,7 @@ class Slide():
         self.add_notes()
 
         # Fill boxes with content
-        if len(self._content) > 0:
+        if len(self.content) > 0:
             self.set_layout_matrix()
             self.create_boxes()       # Create boxes based on layout
             self.fill_boxes()         # Fill boxes with content
@@ -770,34 +872,6 @@ class Slide():
                 self.logger.warning("Could not set title of slide. The slide does not have a title box.")
             else:
                 self._slide.shapes.title.text = self.title
-
-    def add_parameters(self, parameters):
-        """ Add parameters to the slide as internal variables. """
-
-        for key in parameters:
-            if key != "self":
-                setattr(self, key, parameters[key])
-
-    def format_parameters(self):
-        """ Checks and formats specific parameters to the correct type. """
-
-        # Format "n_columns" to int
-        if hasattr(self, "n_columns"):
-            try:
-                self.n_columns = int(self.n_columns)
-            except ValueError:
-                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{self.n_columns}'. Please use an integer.")
-
-        # Format "split" to bool
-        if hasattr(self, "split"):
-            if isinstance(self.split, str):
-
-                if self.split.lower() in ["true", "1", "t", "y", "yes"]:
-                    self.split = True
-                elif self.split.lower() in ["false", "0", "f", "n", "no"]:
-                    self.split = False
-                else:
-                    raise ValueError(f"Could not convert 'split' parameter to bool. The given value is: '{self.split}'. Please use 'True' or 'False'.")
 
     def add_notes(self):
         """ Add notes to the slide. """
@@ -822,47 +896,8 @@ class Slide():
 
             self._slide.notes_slide.notes_text_frame.text = notes_string
 
-    def set_layout_matrix(self):
-        """ Get the content layout matrix for the slide. """
-
-        # Get variables from self
-        layout = self.content_layout
-        n_elements = len(self._content)
-        n_columns = self.n_columns
-
-        # Get layout matrix depending on "layout" variable
-        if layout == "grid":
-            n_columns = min(n_columns, n_elements)  # number of columns cannot be larger than number of elements
-            n_rows = int(np.ceil(n_elements / n_columns))  # number of rows to fit elements
-            n_total = n_rows * n_columns
-
-            intarray = list(range(n_elements))
-            intarray.extend([np.nan] * (n_total - n_elements))
-
-            layout_matrix = np.array(intarray).reshape((n_rows, n_columns))
-
-        elif layout == "vertical":
-            layout_matrix = np.array(list(range(n_elements))).reshape((n_elements, 1))
-
-        elif layout == "horizontal":
-            layout_matrix = np.array(list(range(n_elements))).reshape((1, n_elements))
-
-        else:
-            layout_matrix = self._validate_layout(layout)  # check if layout is a valid matrix
-
-        self._layout_matrix = layout_matrix
-
-    @staticmethod
-    def _validate_layout(layout_matrix):
-        """ Validate the given layout matrix. """
-        # TODO: check if layout is a valid matrix
-
-        layout_matrix = np.array(layout_matrix)
-
-        return layout_matrix
-
     def create_boxes(self):
-        """ Create boxes for the slide dependent on the intrnal layout matrix. """
+        """ Create boxes for the slide dependent on the internal layout matrix. """
 
         layout_matrix = self._layout_matrix
         nrows, ncols = layout_matrix.shape
@@ -959,7 +994,7 @@ class Slide():
     def fill_boxes(self):
         """ Fill the boxes with the elements in self.content """
 
-        for i, element in enumerate(self._content):
+        for i, element in enumerate(self.content):
             self._boxes[i].fill(element, box_index=i)
 
 
