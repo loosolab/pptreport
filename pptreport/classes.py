@@ -916,7 +916,8 @@ class Box():
             full_height = self.height
 
             if self.show_filename:
-                text_height = 20
+                text_height = max(self.height * 0.1, 290000)
+                print(text_height)
                 self.height = text_height
                 self.fill_text(content, True)
                 self.height = full_height - text_height
