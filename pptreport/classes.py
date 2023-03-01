@@ -162,7 +162,8 @@ class PowerPointReport():
             "height_ratios": None,
             "notes": None,
             "split": False,
-            "show_filename": False
+            "show_filename": False,
+            "filename_alignment": "center"
         }
 
     def setup_logger(self, verbosity=1):
@@ -304,7 +305,8 @@ class PowerPointReport():
                   height_ratios=None,
                   notes=None,
                   split=None,
-                  show_filename=None
+                  show_filename=None,
+                  filename_alignment=None
                   ):
         """
         Add a slide to the presentation.
@@ -818,7 +820,7 @@ class Slide():
         box.logger = self.logger  # share logger with box
 
         # Add specific parameters to box
-        keys = ["content_alignment"]
+        keys = ["content_alignment", "filename_alignment"]
         parameters = {key: getattr(self, key) for key in keys}
         box.add_parameters(parameters)
 
@@ -917,12 +919,19 @@ class Box():
 
             if self.show_filename:
                 text_height = max(self.height * 0.1, 290000)
-                print(text_height)
-                self.height = text_height
-                self.fill_text(content, True)
+                text_top = self.top
                 self.height = full_height - text_height
                 self.top = self.top + text_height
             self.fill_image(content)
+            if self.show_filename:
+                self.height = text_height
+                self.top = text_top
+                vertical, horizontal = self._get_content_alignment()
+                if horizontal != "center":
+                    self.left = self.picture.left
+                    self.width = self.picture.width
+                self.fill_text(content, True)
+
 
         elif content_type == "textfile":
             with open(content) as f:
@@ -1053,6 +1062,30 @@ class Box():
 
         return this_alignment.split(" ")
 
+    def _get_filename_alignment(self):
+        """ Get the content alignment for this box. """
+
+        self.logger.debug(f"Getting filename alignment for box '{self.box_index}'. Input filename alignment is '{self.filename_alignment}'")
+
+        if isinstance(self.filename_alignment, str):  # if content alignment is a string, use it for all boxes
+            this_alignment = self.filename_alignment
+
+        elif isinstance(self.filename_alignment, list):  # if content alignment is a list, use the alignment for the current box
+            if self.box_index > len(self.filename_alignment) - 1:  # if box index is out of range, use default alignment
+                this_alignment = "center"  # default alignment
+            else:
+                this_alignment = self.filename_alignment[self.box_index]
+        else:
+            raise ValueError(f"Filename alignment '{self.filename_alignment}' is not valid. Valid filename alignments are: str or list of str")
+
+        # Check if current alignment is valid
+        valid_alignments = ["left", "right", "center"]
+
+        if this_alignment.lower() not in valid_alignments:
+            raise ValueError(f"Alignment '{self.filename_alignment}' is not valid. Valid filename alignments are: {valid_alignments}")
+
+        return this_alignment
+
     def _adjust_image_position(self):
         """ Adjust the position of the image to be in the middle of the box. """
 
@@ -1075,7 +1108,7 @@ class Box():
         elif horizontal == "center":
             self.content_left = self.left + (self.width - self.content_width) / 2
 
-    def fill_text(self, text, force_bottom=False):
+    def fill_text(self, text, is_filename=False):
         """
         Fill the box with text.
 
@@ -1099,17 +1132,18 @@ class Box():
         txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE  # An additional step of resizing text to fit the box
 
         # Set alignment of text in textbox
-        vertical, horizontal = self._get_content_alignment()
-
-        if force_bottom:
-            txt_frame.vertical_anchor = MSO_ANCHOR.BOTTOM
+        if is_filename:
+            vertical = "lower"
+            horizontal = self._get_filename_alignment()
         else:
-            if vertical == "upper":
-                txt_frame.vertical_anchor = MSO_ANCHOR.TOP
-            elif vertical == "lower":
-                txt_frame.vertical_anchor = MSO_ANCHOR.BOTTOM
-            elif vertical == "center":
-                txt_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+            vertical, horizontal = self._get_content_alignment()
+
+        if vertical == "upper":
+            txt_frame.vertical_anchor = MSO_ANCHOR.TOP
+        elif vertical == "lower":
+            txt_frame.vertical_anchor = MSO_ANCHOR.BOTTOM
+        elif vertical == "center":
+            txt_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
 
         if horizontal == "left":
             p.alignment = PP_ALIGN.LEFT
