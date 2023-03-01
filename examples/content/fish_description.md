@@ -1,3 +1,3 @@
-___Fish___ are aquatic, craniate, gill-bearing animals that lack limbs with digits. 
-Included in this definition are the _living hagfish_, _lampreys_, and _cartilaginous_ and _bony fish_ as well as various extinct related groups. 
-Approximately 95% of living fish species are __ray-finned fish__, belonging to the class _Actinopterygii_, with around 99% of those being _teleosts_. 
+Fish are aquatic, craniate, gill-bearing animals that lack limbs with digits. Included in this definition are the _living hagfish_, _lampreys_, and _cartilaginous_ and _bony fish_ as well as various extinct related groups. Approximately 95% of living fish species are __ray-finned fish__, belonging to the class _Actinopterygii_, with around 99% of those being _teleosts_. 
+
+Fish are aquatic, craniate, gill-bearing animals that lack limbs with digits. Included in this definition are the _living hagfish_, _lampreys_, and _cartilaginous_ and _bony fish_ as well as various extinct related groups. Approximately 95% of living fish species are __ray-finned fish__, belonging to the class _Actinopterygii_, with around 99% of those being _teleosts_. 

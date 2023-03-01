@@ -903,9 +903,16 @@ class Box():
                 text = f.read()
             self.fill_text(text)
 
-        elif content_type == "text":
-            self.fill_text(content)
+        elif content_type == "markdown":
+            with open(content) as f:
+                text = f.read()
+            self.fill_text(text, md=True)
 
+        elif content_type == "text":
+            if self._contains_md(content):
+                self.fill_text(content, md=True)
+            else:
+                self.fill_text(content)
         else:
             pass
 
@@ -922,6 +929,10 @@ class Box():
                 try:
                     with open(content) as f:
                         _ = f.read()
+                    # file is readable but ends with md
+                    if content.endswith(".md"):
+                        return "markdown"
+                    # else it's a normal text file    
                     return "textfile"
 
                 except UnicodeDecodeError:
@@ -1049,7 +1060,135 @@ class Box():
         elif horizontal == "center":
             self.content_left = self.left + (self.width - self.content_width) / 2
 
-    def fill_text(self, text):
+    def _contains_md(self, text):
+        """ Checks if a string contains any md sequences.
+            
+        """
+
+        # https://chubakbidpaa.com/interesting/2021/09/28/regex-for-md.html
+        md_regex={"heading":"(#{1,8}\s)(.*)",
+                  "emphasis":"(\*|\_)+(\S+)(\*|\_)+",
+                  "links":"(\[.*\])(\((http)(?:s)?(\:\/\/).*\))",
+                  "images":"(\!)(\[(?:.*)?\])\(.*(\.(jpg|png|gif|tiff|bmp))(?:(\s\"|\')(\w|\W|\d)+(\"|\'))?\)",
+                  "uo-list":"(^(\W{1})(\s)(.*)(?:$)?)+",
+                  "io-list":"(^(\d+\.)(\s)(.*)(?:$)?)+",
+                  }
+
+        for reg in md_regex.values():
+            if re.match(reg, text):
+                return True
+
+        return False
+
+    def _get_text_all_children(self, parent):
+        """ 
+        Small helper to improve robustness. 
+        Should normally be only one child per parent on this level.
+        ! Use only internally for ast tree from mistune !
+        """
+        text=""
+        for c in parent["children"]:
+            text += c["text"]
+        return text
+
+    def _fill_md(self, p, text):
+        """
+        Fills a paragraph p with basic markdown formatted text, like **Bold**, *italic* ,...
+        Supported types: 
+        - Bold     **bold** / __bold__
+        - Italic    *ital*  /  _ital_ 
+        - Link     	[title](https://www.example.com)
+        - Heading   #H1 / ## H2 / ... 
+        (- Image    Only partly - if alternative text is given it will be shown, image should be add via add_image())
+        
+        Parameters
+        ----------
+        p:<pptx.text.text._Paragraph>
+            paragraph to add to
+        text : str
+            The text to be added to the box.
+        """
+        # mistune is only needed for md, only import if needed
+        try:
+            import mistune
+        except :
+            raise ImportError("mistune not install. Please install via `pip3 install mistune`")
+        
+        # render input as html.ast
+        markdown = mistune.create_markdown(renderer="ast")
+        
+        # traverse the tree
+        for par in markdown(text):
+            if par["type"]=="paragraph": 
+                if p.text != "":
+                    run = p.add_run()
+                    run.text="\n"
+                for child in par["children"]: # children are the single md elements like bold, italic,...
+                    # italic
+                    if child["type"]=="emphasis":
+                        run = p.add_run()
+                        run.font.bold = False
+                        run.font.italic = True
+                        run.text = self._get_text_all_children(child)
+                    # bold
+                    elif child["type"]=="strong":
+                        run = p.add_run()
+                        run.text = self._get_text_all_children(child)
+                        run.font.bold = True
+                        run.font.italic = False
+                    # link
+                    elif child["type"]=="link":
+                        run = p.add_run()
+                        run.text = self._get_text_all_children(child)
+                        hlink = run.hyperlink
+                        hlink.address = child["link"]
+                        run.font.bold = False
+                        run.font.italic = False
+                    # alternative text for images
+                    elif child["type"]=="image":
+                        try:
+                            print("markdown images not supported. Trying alternative text.")
+                            text = child["alt"]
+                            run = p.add_run()
+                            run.text = text
+                            run.font.bold = False
+                            run.font.italic = False
+                        except:
+                            print("No alternative text given. Skipping entry.")
+                    # codespan
+                    #elif child["type"]=="codespan": 
+                    # plain text & default case 
+                    else:
+                        try:
+                            text=child["text"]
+                        except:
+                            print("Unknown child type. Trying to append children's content as plain text.")
+                            try: 
+                                text = self._get_text_all_children(child)
+                            except:
+                                print(f"Child type {child['type']} is not supported.")
+                                continue # continue with next child
+                        run = p.add_run()
+                        run.text = text
+                        run.font.bold = False
+                        run.font.italic = False
+
+            elif par["type"]=="heading":
+                # implement heading (bold, bigger) ? Or add it only as plain txt
+                pass
+            elif par["type"]=="list":
+                print(par)
+                # implement list
+                pass
+            else:
+                # will be handled in paragraph > codespan/link/block_code (they have duplicate entries in the tree)
+                pass
+       
+        #resize_text(txt_frame)
+        #txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE  # An additional step of resizing text to fit the box
+        
+            
+    def fill_text(self, text, md=False):
         """
         Fill the box with text.
 
@@ -1066,11 +1205,15 @@ class Box():
         # Place all text in one paragraph
         # txt_frame.add_paragraph() # text_frame already has one paragraph
         p = txt_frame.paragraphs[0]
-        p.text = text
+        if md:
+            self._fill_md(p=p, text=text)
 
-        # Try to fit text size to the box
-        resize_text(txt_frame)
-        txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE  # An additional step of resizing text to fit the box
+        else:
+            p.text = text
+
+            # Try to fit text size to the box
+            resize_text(txt_frame)
+            txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE  # An additional step of resizing text to fit the box
 
         # Set alignment of text in textbox
         vertical, horizontal = self._get_content_alignment()
