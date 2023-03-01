@@ -342,6 +342,11 @@ class PowerPointReport():
             Notes for the slide. Can be either a path to a text file or a string.
         split : bool or int, default False
             Split the content into multiple slides. If True, the content will be split into one-slide-per-element. If an integer, the content will be split into slides with that many elements per slide.
+        show_filename : bool, default False
+            Filenames for images. If True, the filename of the image will be displayed above the image.
+        filename_alignment : str, default "center"
+            Horizontal alignment of the filename. Can be "left", "right" and "center".
+            The default is "center", which will align the content centered horizontally.
         """
 
         # Get input parameters
@@ -816,11 +821,11 @@ class Slide():
             Coordinates containing (left, top, width, height) of the box (in pptx units).
         """
 
-        box = Box(self._slide, coordinates, show_filename)
+        box = Box(self._slide, coordinates)
         box.logger = self.logger  # share logger with box
 
         # Add specific parameters to box
-        keys = ["content_alignment", "filename_alignment"]
+        keys = ["content_alignment", "show_filenames", "filename_alignment"]
         parameters = {key: getattr(self, key) for key in keys}
         box.add_parameters(parameters)
 
@@ -837,7 +842,7 @@ class Slide():
 class Box():
     """ A box is a constrained area of the slide which contains a single element e.g. text, a picture, a table, etc. """
 
-    def __init__(self, slide, coordinates, show_filename):
+    def __init__(self, slide, coordinates):
         """
         Initialize a box.
 
@@ -931,7 +936,6 @@ class Box():
                     self.left = self.picture.left
                     self.width = self.picture.width
                 self.fill_text(content, True)
-
 
         elif content_type == "textfile":
             with open(content) as f:
