@@ -13,7 +13,7 @@ from natsort import natsorted
 from pptx import Presentation
 from pptx.util import Cm
 
-from pptreport import Slide
+from pptreport.slide import Slide
 
 ###############################################################################
 # ---------------------------- Helper functions ----------------------------- #
@@ -141,8 +141,6 @@ class PowerPointReport():
 
         # Default slide parameters
         self._default_slide_parameters = {
-            "content": [],
-            "grouped_content": [],
             "title": None,
             "slide_layout": 1,
             "content_layout": "grid",
@@ -203,7 +201,7 @@ class PowerPointReport():
         self._prs = Presentation(self.template)
 
         # Get ready to collect configuration
-        self.config_dict = {}  # configuration dictionary
+        self._config_dict = {}  # configuration dictionary
 
         # Set size of the presentation (if not given by a template)
         if self.template is None:
@@ -214,9 +212,9 @@ class PowerPointReport():
 
         # Add info to config dict
         if self.template is not None:
-            self.config_dict["template"] = self.template
+            self._config_dict["template"] = self.template
         else:
-            self.config_dict["size"] = self.size
+            self._config_dict["size"] = self.size
 
     def add_global_parameters(self, parameters):
         """ Add global parameters to the presentation """
@@ -236,15 +234,15 @@ class PowerPointReport():
                 self._default_slide_parameters[k] = v
 
         # Add to internal config dict
-        self.config_dict["global_parameters"] = parameters
+        self._config_dict["global_parameters"] = parameters
 
     def add_to_config(self, parameters):
         """ Add the slide parameters to the config file """
 
-        if "slides" not in self.config_dict:
-            self.config_dict["slides"] = []
+        if "slides" not in self._config_dict:
+            self._config_dict["slides"] = []
 
-        self.config_dict["slides"].append(parameters)
+        self._config_dict["slides"].append(parameters)
 
     def set_size(self, size):
         """
@@ -375,7 +373,7 @@ class PowerPointReport():
         self.add_to_config(parameters)
         self.logger.debug("Final slide parameters: {}".format(parameters))
 
-        # Check validity of parameters before creating slides
+        # Check validity and format parameters before creating slides
         parameters = Slide.format_parameters(parameters)
 
         # Add slides dependent on content type
@@ -395,7 +393,7 @@ class PowerPointReport():
             content = self._get_content(parameters)
 
             # Create slide(s)
-            for slide_content in parameters["content"]:
+            for slide_content in content:
 
                 # Setup an empty slide
                 slide = self._setup_slide(parameters)
@@ -415,32 +413,6 @@ class PowerPointReport():
         # If split is given, content should be given
         if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
             raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
-
-        return parameters
-
-    def format_slide_parameters(self, parameters):
-        """ Format and expand the input parameters for the slide. """
-
-        # Establish content
-        content = parameters["content"]
-        if isinstance(content, str):
-            content = [content]
-
-        # Expand content
-        content = glob_files(content)
-
-        # If split is false, content should be contained in one slide
-        if parameters["split"] is False:
-            content = [content]
-        else:
-            if len(content) == 0:
-                raise ValueError("Split is True, but 'content' is empty.")
-            else:
-                content = glob_files(content)
-                if isinstance(parameters["split"], int):
-                    content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
-
-        parameters["content"] = content
 
         return parameters
 
@@ -485,7 +457,28 @@ class PowerPointReport():
         return slide
 
     def _get_content(self, parameters):
-        pass
+        """ Get slide content based on input parameters. """
+
+        # Establish content
+        content = parameters.get("content", [])
+        if isinstance(content, str):
+            content = [content]
+
+        # Expand content files
+        content = glob_files(content)
+
+        # If split is false, content should be contained in one slide
+        if parameters["split"] is False:
+            content = [content]
+        else:
+            if len(content) == 0:
+                raise ValueError("Split is True, but 'content' is empty.")
+            else:
+                content = glob_files(content)
+                if isinstance(parameters["split"], int):
+                    content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
+
+        return content
 
     def _get_paired_content(self, raw_content):
         """ Get content per group from a list of regex patterns.
@@ -575,7 +568,7 @@ class PowerPointReport():
     # --------------------- Saving / loading presentations ---------------------
     # ------------------------------------------------------------------------ #
 
-    def get_config(self, full=False):
+    def get_config(self, full=False, expand=False):
         """
         Collect a dictionary with the configuration of the presentation
 
@@ -583,6 +576,8 @@ class PowerPointReport():
         ----------
         full : bool, default False
             If True, return the full configuration of the presentation. If False, only return the non-default values.
+        expand : bool, default False
+            If True, expand the content of each slide to a list of files. If False, keep the content as input including "*" and regex.
 
         Returns
         -------
@@ -590,8 +585,23 @@ class PowerPointReport():
             Dictionary with the configuration of the presentation.
         """
 
-        # Read parameters from internal config_dict
-        config = self.config_dict.copy()
+        # Get configuration of presentation
+        if expand is True:  # Read parameters directly from report object
+
+            config = dict(self.__dict__)
+
+            # Add configuration of each slide
+            config["slides"] = []
+            for slide in self._slides:
+                config["slides"].append(slide.get_config())
+
+            # Remove internal variables
+            for key in list(config.keys()):  # list to prevent RuntimeError: dictionary changed size during iteration
+                if key.startswith("_") or key == "logger":
+                    del config[key]
+
+        else:  # Read parameters from internal config_dict
+            config = self._config_dict.copy()
 
         # Get default slide parameters
         defaults = self._default_slide_parameters
@@ -610,16 +620,16 @@ class PowerPointReport():
 
                 # Remove default values if full is False
                 if full is False:
-                    if value == defaults[key]:  # compares to the unconverted value
+                    if value == defaults.get(key, None):  # compares to the unconverted value
                         del slide_config[key]
                     elif isinstance(value, list) and len(value) == 0:  # content can be an empty list
                         del slide_config[key]
 
         return config
 
-    def write_config(self, filename, full=False):
+    def write_config(self, filename, full=False, expand=False):
         """
-        Write the configuration of the presentation to a json-formatted file.
+        Write the configuration of the presentation to a json-formatted file. 
 
         Parameters
         ----------
@@ -627,6 +637,8 @@ class PowerPointReport():
             Path to the file to write the configuration to.
         full : bool, default False
             If True, write the full configuration of the presentation. If False, only write the non-default values.
+        expand : bool, default False
+            If True, expand the content of each slide to a list of files. If False, keep the content as input including "*" and regex.
         """
 
         config = self.get_config(full=full)

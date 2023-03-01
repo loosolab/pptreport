@@ -2,7 +2,7 @@
 import numpy as np
 import os
 from pptx.util import Cm
-from pptreport import Box
+from pptreport.box import Box
 
 
 class Slide():
@@ -41,12 +41,24 @@ class Slide():
                 else:
                     raise ValueError(f"Could not convert 'split' parameter to bool. The given value is: '{split}'. Please use 'True' or 'False'.")
 
+        return parameters
+
     def add_parameters(self, parameters):
         """ Add parameters to the slide as internal variables. """
 
         for key in parameters:
             if key != "self":
                 setattr(self, key, parameters[key])
+
+    def get_config(self):
+        """ Get the config dictionary for this slide. """
+
+        config = self.__dict__.copy()  # Make a copy to not change the original dict
+        for key in list(config):
+            if key.startswith("_") or key == "logger":
+                del config[key]
+
+        return config
 
     def set_layout_matrix(self):
         """ Get the content layout matrix for the slide. """
