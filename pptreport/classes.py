@@ -754,8 +754,6 @@ class Slide():
         bottom_margin_unit = Cm(bottom_margin)
         inner_margin_unit = Cm(self.inner_margin)
 
-        show_filename = self.show_filename
-
         # Add to top margin based on size of title
         if self._slide.shapes.title.text != "":
             top_margin_unit = self._slide.shapes.title.top + self._slide.shapes.title.height + top_margin_unit
@@ -809,9 +807,9 @@ class Slide():
             width += (len(cols) - 1) * inner_margin_unit  # add inner margins between columns
 
             #  Create box
-            self.add_box((left, top, width, height), show_filename)
+            self.add_box((left, top, width, height))
 
-    def add_box(self, coordinates, show_filename):
+    def add_box(self, coordinates):
         """
         Add a box to the slide.
 
@@ -825,7 +823,7 @@ class Slide():
         box.logger = self.logger  # share logger with box
 
         # Add specific parameters to box
-        keys = ["content_alignment", "show_filenames", "filename_alignment"]
+        keys = ["content_alignment", "show_filename", "filename_alignment"]
         parameters = {key: getattr(self, key) for key in keys}
         box.add_parameters(parameters)
 
@@ -862,8 +860,6 @@ class Box():
         self.top = int(coordinates[1])
         self.width = int(coordinates[2])
         self.height = int(coordinates[3])
-
-        self.show_filename = show_filename
 
         # Initialize bounds of the content (can be smaller than the box)
         self.content = None
