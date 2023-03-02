@@ -60,11 +60,11 @@ tests:
     reports:
       junit: pytest.xml
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event" # all MR
-      changes:
+    - changes: 
       - tests/*.py
-      - pptreport/*.py
-
+      - pptreport/*.pyy
+      when: always
+      
 #Test notebooks when code is pushed to main
 notebooks:
   image: continuumio/miniconda3:latest
