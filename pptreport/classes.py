@@ -688,7 +688,9 @@ class Slide():
         """ Add notes to the slide. """
 
         if self.notes is not None:
-            if os.path.exists(self.notes):
+            if isinstance(self.notes, list):
+                notes_string = '\n'.join(self.notes)
+            elif os.path.exists(self.notes):
                 with open(self.notes, "r") as f:
                     notes_string = f.read()
             else:
@@ -919,6 +921,7 @@ class Box():
             full_height = self.height
 
             if self.show_filename:
+                # set height of filename to 1/10 of the textbox but at least 290000 (matches Calibri size 12) to ensure the text is still readable
                 text_height = max(self.height * 0.1, 290000)
                 text_top = self.top
                 self.height = full_height - text_height
@@ -931,7 +934,7 @@ class Box():
                 if horizontal != "center":
                     self.left = self.picture.left
                     self.width = self.picture.width
-                self.fill_text(content, True)
+                self.fill_text(content, is_filename=True)
 
         elif content_type == "textfile":
             with open(content) as f:
