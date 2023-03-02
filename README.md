@@ -90,8 +90,8 @@ The example file at [examples/report_config.json](examples/report_config.json) g
 | height_ratios | list of floats | This list of values, which must have the same length as the number of rows, controls the height of individual content rows. For example, `height_ratios=[2,1]` sets the first row to double the height of the second row. Default is that every row has equal height. | [0.1, 0.9]<br />[2, 2, 1] |
 | notes | str | This string gives the path to a file, or the direct string, which should be added to the "notes" section of the slide. | "This text will be in notes"<br />"notes.txt" | 
 | split | bool | If number of elements in `content` is large, it might be beneficial to split the elements to separate slides. If `split` is True, every element in content is written to its own slide (and as such, the slide config actually expands to more than one slide). All other parameters (such as title) are equal for all expanded slides. The default is False, meaning that all content is placed into one slide. | False |
-| show_filename | bool | ... | ... |
-| filename_alignment | str | ... | ... |
+| show_filename | bool | Filenames for images. If True, the filename of the image will be displayed above the image. Default is False. | True |
+| filename_alignment | string or list of strings | The horizontal alignment of the filename of an image within each content box. If a string is given, all filenames on the slide will be aligned in the same way. If a list of strings is given, the alignment strings correspond to the order of images in content, e.g. ["center", "left"] will align the first two filenames center and left, respectively. The default is "center", which will align the filename centered horizontally. | "left"<br />"center"<br />"right"<br />["center", "left"] |
 
 
 ## Source of example images
