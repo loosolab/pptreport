@@ -161,7 +161,9 @@ class PowerPointReport():
             "width_ratios": None,
             "height_ratios": None,
             "notes": None,
-            "split": False
+            "split": False,
+            "show_filename": False,
+            "filename_alignment": "center"
         }
 
     def setup_logger(self, verbosity=1):
@@ -302,7 +304,9 @@ class PowerPointReport():
                   width_ratios=None,
                   height_ratios=None,
                   notes=None,
-                  split=None
+                  split=None,
+                  show_filename=None,
+                  filename_alignment=None
                   ):
         """
         Add a slide to the presentation.
@@ -338,6 +342,11 @@ class PowerPointReport():
             Notes for the slide. Can be either a path to a text file or a string.
         split : bool or int, default False
             Split the content into multiple slides. If True, the content will be split into one-slide-per-element. If an integer, the content will be split into slides with that many elements per slide.
+        show_filename : bool, default False
+            Filenames for images. If True, the filename of the image will be displayed above the image.
+        filename_alignment : str, default "center"
+            Horizontal alignment of the filename. Can be "left", "right" and "center".
+            The default is "center", which will align the content centered horizontally.
         """
 
         # Get input parameters
@@ -664,6 +673,17 @@ class Slide():
                 else:
                     raise ValueError(f"Could not convert 'split' parameter to bool. The given value is: '{self.split}'. Please use 'True' or 'False'.")
 
+        # Format "show_filename" to bool
+        if hasattr(self, "show_filename"):
+            if isinstance(self.show_filename, str):
+
+                if self.show_filename.lower() in ["true", "1", "t", "y", "yes"]:
+                    self.show_filename = True
+                elif self.show_filename.lower() in ["false", "0", "f", "n", "no"]:
+                    self.show_filename = False
+                else:
+                    raise ValueError(f"Could not convert 'show_filename' parameter to bool. The given value is: '{self.show_filename}'. Please use 'True' or 'False'.")
+
     def add_notes(self):
         """ Add notes to the slide. """
 
@@ -814,7 +834,7 @@ class Slide():
         box.logger = self.logger  # share logger with box
 
         # Add specific parameters to box
-        keys = ["content_alignment"]
+        keys = ["content_alignment", "show_filename", "filename_alignment"]
         parameters = {key: getattr(self, key) for key in keys}
         box.add_parameters(parameters)
 
@@ -907,7 +927,23 @@ class Box():
             os.remove(filename)
 
         elif content_type == "image":
+            full_height = self.height
+
+            if self.show_filename:
+                # set height of filename to 1/10 of the textbox but at least 290000 (matches Calibri size 12) to ensure the text is still readable
+                text_height = max(self.height * 0.1, 290000)
+                text_top = self.top
+                self.height = full_height - text_height
+                self.top = self.top + text_height
             self.fill_image(content)
+            if self.show_filename:
+                self.height = text_height
+                self.top = text_top
+                vertical, horizontal = self._get_content_alignment()
+                if horizontal != "center":
+                    self.left = self.picture.left
+                    self.width = self.picture.width
+                self.fill_text(content, is_filename=True)
 
         elif content_type == "textfile":
             with open(content) as f:
@@ -1038,6 +1074,30 @@ class Box():
 
         return this_alignment.split(" ")
 
+    def _get_filename_alignment(self):
+        """ Get the content alignment for this box. """
+
+        self.logger.debug(f"Getting filename alignment for box '{self.box_index}'. Input filename alignment is '{self.filename_alignment}'")
+
+        if isinstance(self.filename_alignment, str):  # if content alignment is a string, use it for all boxes
+            this_alignment = self.filename_alignment
+
+        elif isinstance(self.filename_alignment, list):  # if content alignment is a list, use the alignment for the current box
+            if self.box_index > len(self.filename_alignment) - 1:  # if box index is out of range, use default alignment
+                this_alignment = "center"  # default alignment
+            else:
+                this_alignment = self.filename_alignment[self.box_index]
+        else:
+            raise ValueError(f"Filename alignment '{self.filename_alignment}' is not valid. Valid filename alignments are: str or list of str")
+
+        # Check if current alignment is valid
+        valid_alignments = ["left", "right", "center"]
+
+        if this_alignment.lower() not in valid_alignments:
+            raise ValueError(f"Alignment '{self.filename_alignment}' is not valid. Valid filename alignments are: {valid_alignments}")
+
+        return this_alignment
+
     def _adjust_image_position(self):
         """ Adjust the position of the image to be in the middle of the box. """
 
@@ -1060,7 +1120,7 @@ class Box():
         elif horizontal == "center":
             self.content_left = self.left + (self.width - self.content_width) / 2
 
-    def fill_text(self, text):
+    def fill_text(self, text, is_filename=False):
         """
         Fill the box with text.
 
@@ -1084,7 +1144,11 @@ class Box():
         txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE  # An additional step of resizing text to fit the box
 
         # Set alignment of text in textbox
-        vertical, horizontal = self._get_content_alignment()
+        if is_filename:
+            vertical = "lower"
+            horizontal = self._get_filename_alignment()
+        else:
+            vertical, horizontal = self._get_content_alignment()
 
         if vertical == "upper":
             txt_frame.vertical_anchor = MSO_ANCHOR.TOP
