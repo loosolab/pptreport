@@ -30,7 +30,7 @@ default:
     - virtualenv venv
     - source venv/bin/activate
     - apt update
-    - pip install .[all]
+    - pip install .
 
 # flake8 ignore rules:
 # E501 = Line too long
@@ -41,10 +41,29 @@ lint:
     - pip install flake8
     # ignore __init__.py from linting because of "F401 '._version.__version__' imported but unused"
     # temporary workaround for version import setup.cfg
-    - flake8 pptreport --ignore=E501,W503 --extend-exclude=pptreport/__init__.py
+    - flake8 pptreport tests --ignore=E501,W503 --extend-exclude=pptreport/__init__.py
   allow_failure: false
   rules:
     - when: always
+
+tests:
+  coverage: '/TOTAL.*\s(\d*.\d*\%)/'
+  script:
+    - pip install pytest
+    - pip install pytest-cov
+    - pytest --cov-report=term --cov=pptreport  --junitxml=pytest.xml --cov-report html:htmlcov .
+  artifacts:
+    when: always
+    paths:
+      - pytest.xml
+      - htmlcov
+    reports:
+      junit: pytest.xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" # all MR
+      changes:
+      - tests/*.py
+      - pptreport/*.py
 
 #Test notebooks when code is pushed to main
 notebooks:
