@@ -77,11 +77,6 @@ def glob_files(lst):
     return content
 
 
-def glob_regex(pattern):
-    """ Glob files using a regex pattern """
-    pass
-
-
 def get_files_in_dir(directory):
     """ Get all files in the given directory including the path prefix """
 
