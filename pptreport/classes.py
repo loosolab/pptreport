@@ -163,7 +163,8 @@ class PowerPointReport():
             "notes": None,
             "split": False,
             "show_filename": False,
-            "filename_alignment": "center"
+            "filename_alignment": "center",
+            "fill_by": "row"
         }
 
     def setup_logger(self, verbosity=1):
@@ -326,7 +327,8 @@ class PowerPointReport():
                   notes=None,
                   split=None,
                   show_filename=None,
-                  filename_alignment=None
+                  filename_alignment=None,
+                  fill_by=None,
                   ):
         """
         Add a slide to the presentation.
@@ -367,6 +369,8 @@ class PowerPointReport():
         filename_alignment : str, default "center"
             Horizontal alignment of the filename. Can be "left", "right" and "center".
             The default is "center", which will align the content centered horizontally.
+        fill_by : str, default "row"
+            If slide_layout is grid or custom, choose to fill the grid row-by-row or column-by-column. 'fill_by' can be "row" or "column".
         """
 
         # Get input parameters
@@ -745,7 +749,13 @@ class Slide():
             intarray = list(range(n_elements))
             intarray.extend([np.nan] * (n_total - n_elements))
 
-            layout_matrix = np.array(intarray).reshape((n_rows, n_columns))
+            if self.fill_by == "row":
+                layout_matrix = np.array(intarray).reshape((n_rows, n_columns))
+            elif self.fill_by == "column":
+                layout_matrix = np.array(intarray).reshape((n_columns, n_rows))
+                layout_matrix = layout_matrix.T
+            else:
+                raise ValueError(f"Invalid value for 'fill_by' parameter: '{self.fill_by}'. Please use 'row' or 'column'.")
 
         elif layout == "vertical":
             layout_matrix = np.array(list(range(n_elements))).reshape((n_elements, 1))
