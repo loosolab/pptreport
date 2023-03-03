@@ -1,4 +1,3 @@
-
 import numpy as np
 import os
 from pptx.util import Cm
@@ -40,6 +39,17 @@ class Slide():
                     parameters["split"] = False
                 else:
                     raise ValueError(f"Could not convert 'split' parameter to bool. The given value is: '{split}'. Please use 'True' or 'False'.")
+
+        # Format "show_filename" to bool
+        if "show_filename" in parameters:
+            show_filename = parameters["show_filename"]
+            if isinstance(show_filename, str):
+                if show_filename.lower() in ["true", "1", "t", "y", "yes"]:
+                    parameters["show_filename"] = True
+                elif show_filename.lower() in ["false", "0", "f", "n", "no"]:
+                    parameters["show_filename"] = False
+                else:
+                    raise ValueError(f"Could not convert 'show_filename' parameter to bool. The given value is: '{show_filename}'. Please use 'True' or 'False'.")
 
         return parameters
 
@@ -227,7 +237,7 @@ class Slide():
         box.logger = self.logger  # share logger with box
 
         # Add specific parameters to box
-        keys = ["content_alignment"]
+        keys = ["content_alignment", "show_filename", "filename_alignment"]
         parameters = {key: getattr(self, key) for key in keys}
         box.add_parameters(parameters)
 

@@ -155,7 +155,9 @@ class PowerPointReport():
             "width_ratios": None,
             "height_ratios": None,
             "notes": None,
-            "split": False
+            "split": False,
+            "show_filename": False,
+            "filename_alignment": "center"
         }
 
     def setup_logger(self, verbosity=1):
@@ -321,7 +323,9 @@ class PowerPointReport():
                   width_ratios=None,
                   height_ratios=None,
                   notes=None,
-                  split=None
+                  split=None,
+                  show_filename=None,
+                  filename_alignment=None
                   ):
         """
         Add a slide to the presentation.
@@ -359,6 +363,11 @@ class PowerPointReport():
             Notes for the slide. Can be either a path to a text file or a string.
         split : bool or int, default False
             Split the content into multiple slides. If True, the content will be split into one-slide-per-element. If an integer, the content will be split into slides with that many elements per slide.
+        show_filename : bool, default False
+            Filenames for images. If True, the filename of the image will be displayed above the image.
+        filename_alignment : str, default "center"
+            Horizontal alignment of the filename. Can be "left", "right" and "center".
+            The default is "center", which will align the content centered horizontally.
         """
 
         # Get input parameters
