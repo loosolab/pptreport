@@ -195,3 +195,19 @@ def test_content_fill(content):
     report.add_slide(content=content)
 
     assert len(report._slides) == 1  # assert that a slide was added
+
+
+@pytest.mark.parametrize("pdf", [True, False])
+def test_pdf_output(pdf):
+    """ Test that pdf output works """
+
+    report = PowerPointReport()
+    report.add_slide("A text")
+    report.save("test.pptx", pdf=pdf)
+
+    assert os.path.exists("test.pptx")
+    os.remove("test.pptx")
+
+    if pdf:
+        assert os.path.exists("test.pdf")
+        os.remove("test.pdf")
