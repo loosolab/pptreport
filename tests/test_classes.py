@@ -140,3 +140,21 @@ def test_slide_layout(slide_layout, valid):
     else:
         with pytest.raises(Exception):
             report.add_slide("A text", slide_layout=slide_layout)
+
+
+@pytest.mark.parametrize("notes, valid", [("A note", True),
+                                          (["A note", "Another note"], True),
+                                          ("examples/content/fish_description.txt", True),
+                                          (dict, False),
+                                          ([dict], False)
+                                          ])
+def test_add_notes(notes, valid):
+    """ Test that notes can be added to slides, and that an error is thrown if the notes are invalid """
+
+    report = PowerPointReport()
+
+    if valid:
+        report.add_slide("A text", notes=notes)
+    else:
+        with pytest.raises(ValueError, match="Notes must be either a string or a list of strings."):
+            report.add_slide("A text", notes=notes)

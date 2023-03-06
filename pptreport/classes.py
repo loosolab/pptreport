@@ -714,19 +714,26 @@ class Slide():
             if isinstance(self.notes, list):
                 notes_string = ''
                 for s in self.notes:
-                    if os.path.exists(s):
-                        with open(s, 'r') as f:
-                            notes_string += f'\n{f.read()}'
+                    if isinstance(s, str):
+                        if os.path.exists(s):
+                            with open(s, 'r') as f:
+                                notes_string += f'\n{f.read()}'
+                        else:
+                            notes_string += f'\n{s}'
                     else:
-                        notes_string += f'\n{s}'
+                        raise ValueError("Notes must be either a string or a list of strings.")
+
                 notes_string = notes_string.lstrip()  # remove leading newline
 
-            elif os.path.exists(self.notes):
-                with open(self.notes, "r") as f:
-                    notes_string = f.read()
+            elif isinstance(self.notes, str):
+                if os.path.exists(self.notes):
+                    with open(self.notes, "r") as f:
+                        notes_string = f.read()
 
+                else:
+                    notes_string = self.notes
             else:
-                notes_string = self.notes
+                raise ValueError("Notes must be either a string or a list of strings.")
 
             self._slide.notes_slide.notes_text_frame.text = notes_string
 
