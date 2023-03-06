@@ -158,3 +158,40 @@ def test_add_notes(notes, valid):
     else:
         with pytest.raises(ValueError, match="Notes must be either a string or a list of strings."):
             report.add_slide("A text", notes=notes)
+
+
+@pytest.mark.parametrize("content, valid", [("grid", True),
+                                            ("vertical", True),
+                                            ("horizontal", True),
+                                            ([0, 1, 2], True),
+                                            ([[0, 1], [2, 3]], True),
+                                            ("invalid", False),           # invalid string
+                                            ([[0, 1, 2], [3, 4]], False)  # inconsistent number of columns
+                                            ])
+def test_content_layout(content, valid):
+    """ Test that content layout is correctly validated """
+
+    report = PowerPointReport()
+
+    if valid:
+        report.add_slide("A text", content_layout=content)
+    else:
+        if isinstance(content, str):
+            with pytest.raises(ValueError, match="Unknown layout string:"):
+                report.add_slide("A text", content_layout=content)
+        else:
+            with pytest.raises(ValueError):
+                report.add_slide("A text", content_layout=content)
+
+
+@pytest.mark.parametrize("content", ["examples/content/fish_description.txt",
+                                     "examples/content/fish_description.md",
+                                     "examples/content/cat.jpg",
+                                     "examples/content/chips.pdf"])
+def test_content_fill(content):
+    """ Test that filling of slides with different types of content does not throw an error """
+
+    report = PowerPointReport(verbosity=2)
+    report.add_slide(content=content)
+
+    assert len(report._slides) == 1  # assert that a slide was added

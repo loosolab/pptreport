@@ -11,6 +11,10 @@ import logging
 import sys
 from natsort import natsorted
 
+
+import warnings
+from numpy import VisibleDeprecationWarning
+
 # For reading pictures
 from PIL import Image
 import fitz
@@ -711,30 +715,23 @@ class Slide():
         """ Add notes to the slide. """
 
         if self.notes is not None:
-            if isinstance(self.notes, list):
-                notes_string = ''
-                for s in self.notes:
-                    if isinstance(s, str):
-                        if os.path.exists(s):
-                            with open(s, 'r') as f:
-                                notes_string += f'\n{f.read()}'
-                        else:
-                            notes_string += f'\n{s}'
+
+            # Convert notes to a list to enable looping
+            if not isinstance(self.notes, list):
+                self.notes = [self.notes]
+
+            notes_string = ''
+            for s in self.notes:
+                if isinstance(s, str):
+                    if os.path.exists(s):
+                        with open(s, 'r') as f:
+                            notes_string += f'\n{f.read()}'
                     else:
-                        raise ValueError("Notes must be either a string or a list of strings.")
-
-                notes_string = notes_string.lstrip()  # remove leading newline
-
-            elif isinstance(self.notes, str):
-                if os.path.exists(self.notes):
-                    with open(self.notes, "r") as f:
-                        notes_string = f.read()
-
+                        notes_string += f'\n{s}'
                 else:
-                    notes_string = self.notes
-            else:
-                raise ValueError("Notes must be either a string or a list of strings.")
+                    raise ValueError("Notes must be either a string or a list of strings.")
 
+            notes_string = notes_string.lstrip()  # remove leading newline
             self._slide.notes_slide.notes_text_frame.text = notes_string
 
     def set_layout_matrix(self):
@@ -746,23 +743,26 @@ class Slide():
         n_columns = self.n_columns
 
         # Get layout matrix depending on "layout" variable
-        if layout == "grid":
-            n_columns = min(n_columns, n_elements)  # number of columns cannot be larger than number of elements
-            n_rows = int(np.ceil(n_elements / n_columns))  # number of rows to fit elements
-            n_total = n_rows * n_columns
+        if isinstance(layout, str):
+            if layout == "grid":
+                n_columns = min(n_columns, n_elements)  # number of columns cannot be larger than number of elements
+                n_rows = int(np.ceil(n_elements / n_columns))  # number of rows to fit elements
+                n_total = n_rows * n_columns
 
-            intarray = list(range(n_elements))
-            intarray.extend([np.nan] * (n_total - n_elements))
+                intarray = list(range(n_elements))
+                intarray.extend([np.nan] * (n_total - n_elements))
 
-            layout_matrix = np.array(intarray).reshape((n_rows, n_columns))
+                layout_matrix = np.array(intarray).reshape((n_rows, n_columns))
 
-        elif layout == "vertical":
-            layout_matrix = np.array(list(range(n_elements))).reshape((n_elements, 1))
+            elif layout == "vertical":
+                layout_matrix = np.array(list(range(n_elements))).reshape((n_elements, 1))
 
-        elif layout == "horizontal":
-            layout_matrix = np.array(list(range(n_elements))).reshape((1, n_elements))
+            elif layout == "horizontal":
+                layout_matrix = np.array(list(range(n_elements))).reshape((1, n_elements))
+            else:
+                raise ValueError(f"Unknown layout string: '{layout}'. Please use 'grid', 'vertical' or 'horizontal', or a custom matrix.")
 
-        else:
+        else:  # layout is expected to be a matrix
             layout_matrix = self._validate_layout(layout)  # check if layout is a valid matrix
 
         self._layout_matrix = layout_matrix
@@ -772,7 +772,15 @@ class Slide():
         """ Validate the given layout matrix. """
         # TODO: check if layout is a valid matrix
 
-        layout_matrix = np.array(layout_matrix)
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("error", category=VisibleDeprecationWarning, message="Creating an ndarray from ragged nested*")
+                layout_matrix = np.array(layout_matrix)
+        except VisibleDeprecationWarning:
+            raise ValueError("The given layout matrix is not valid. Please make sure that all rows have the same length.")
+
+        if len(layout_matrix.shape) == 1:
+            layout_matrix = layout_matrix.reshape((1, len(layout_matrix)))  # convert to 2D array
 
         return layout_matrix
 
