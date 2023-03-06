@@ -266,6 +266,7 @@ class PowerPointReport():
             if len(size) != 2:
                 raise ValueError("Size tuple must be of length 2.")
 
+            size = tuple([float(s) for s in size])  # convert to floats
             h, w = Cm(size[0]), Cm(size[1])
 
         elif size == "standard":
@@ -441,10 +442,11 @@ class PowerPointReport():
                 raise IndexError(f"Layout index {slide_layout} not found in slide master. The number of slide layouts is {n_layouts} (the maximum index is {n_layouts-1})")
 
         elif isinstance(slide_layout, str):
-            try:
-                layout_obj = self._prs.slide_layouts.get_by_name(slide_layout)
-            except KeyError:
+
+            layout_obj = self._prs.slide_layouts.get_by_name(slide_layout)
+            if layout_obj is None:
                 raise KeyError(f"Layout named '{slide_layout}' not found in slide master.")
+
         else:
             raise TypeError("Layout should be an integer or a string.")
 
