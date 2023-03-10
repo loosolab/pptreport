@@ -255,7 +255,7 @@ class PowerPointReport():
         if isinstance(size, tuple):
             if len(size) != 2:
                 raise ValueError("Size tuple must be of length 2.")
-
+            size = [float(s) for s in size]  # convert eventual strings to floats
             h, w = Cm(size[0]), Cm(size[1])
 
         elif size == "standard":
