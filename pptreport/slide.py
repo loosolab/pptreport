@@ -122,6 +122,10 @@ class Slide():
             self.create_boxes()       # Create boxes based on layout
             self.fill_boxes()         # Fill boxes with content
 
+        # Remove empty placeholders
+        if self.remove_placeholders:
+            self.remove_empty_ph()
+
     def set_title(self):
         """ Set the title of the slide. Requires self.title to be set. """
 
@@ -255,3 +259,13 @@ class Slide():
 
         for i, element in enumerate(self.content):
             self._boxes[i].fill(element, box_index=i)
+
+    def remove_empty_ph(self):
+        """ Remove empty placeholders from the slide. """
+
+        if hasattr(self._slide, 'placeholders'):
+            for shape in self._slide.placeholders:
+                if shape.has_text_frame and shape.text == '':
+                    sp = shape.element
+                    sp.getparent().remove(sp)
+                    self.logger.debug(f"Removed empty placeholder '{shape.name}' (idx: {shape.placeholder_format.idx})")
