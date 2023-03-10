@@ -152,7 +152,8 @@ class PowerPointReport():
             "notes": None,
             "split": False,
             "show_filename": False,
-            "filename_alignment": "center"
+            "filename_alignment": "center",
+            "fill_by": "row"
         }
 
     def setup_logger(self, verbosity=1):
@@ -320,7 +321,8 @@ class PowerPointReport():
                   notes=None,
                   split=None,
                   show_filename=None,
-                  filename_alignment=None
+                  filename_alignment=None,
+                  fill_by=None,
                   ):
         """
         Add a slide to the presentation.
@@ -363,6 +365,8 @@ class PowerPointReport():
         filename_alignment : str, default "center"
             Horizontal alignment of the filename. Can be "left", "right" and "center".
             The default is "center", which will align the content centered horizontally.
+        fill_by : str, default "row"
+            If slide_layout is grid or custom, choose to fill the grid row-by-row or column-by-column. 'fill_by' can be "row" or "column".
         """
 
         # Get input parameters
