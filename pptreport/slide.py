@@ -25,33 +25,23 @@ class Slide():
         parameters = parameters.copy()  # Make a copy to not change the original dict
 
         # Format "n_columns" to int
-        if "n_columns" in parameters:  # hasattr(self, "n_columns"):
+        if "n_columns" in parameters:
             try:
                 parameters["n_columns"] = int(parameters["n_columns"])
             except ValueError:
                 raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
 
-        # Format "split" to bool
-        if "split" in parameters:
-            split = parameters["split"]
-            if isinstance(split, str):
-                if split.lower() in ["true", "1", "t", "y", "yes"]:
-                    parameters["split"] = True
-                elif split.lower() in ["false", "0", "f", "n", "no"]:
-                    parameters["split"] = False
-                else:
-                    raise ValueError(f"Could not convert 'split' parameter to bool. The given value is: '{split}'. Please use 'True' or 'False'.")
-
-        # Format "show_filename" to bool
-        if "show_filename" in parameters:
-            show_filename = parameters["show_filename"]
-            if isinstance(show_filename, str):
-                if show_filename.lower() in ["true", "1", "t", "y", "yes"]:
-                    parameters["show_filename"] = True
-                elif show_filename.lower() in ["false", "0", "f", "n", "no"]:
-                    parameters["show_filename"] = False
-                else:
-                    raise ValueError(f"Could not convert 'show_filename' parameter to bool. The given value is: '{show_filename}'. Please use 'True' or 'False'.")
+        # Format "split" and "show_filename" to bool
+        for key in ["split", "show_filename"]:
+            if key in parameters:
+                value = parameters[key]
+                if isinstance(value, str):
+                    if value.lower() in ["true", "1", "t", "y", "yes"]:
+                        parameters[key] = True
+                    elif value.lower() in ["false", "0", "f", "n", "no"]:
+                        parameters[key] = False
+                    else:
+                        raise ValueError(f"Could not convert '{key}' parameter to bool. The given value is: '{value}'. Please use 'True' or 'False'.")
 
         return parameters
 
