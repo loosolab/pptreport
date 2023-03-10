@@ -1,11 +1,14 @@
-from pptreport.classes import PowerPointReport
+from pptreport import PowerPointReport
 import pytest
 import json
 import os
 
+content_dir = "examples/content/"
+
 
 @pytest.mark.parametrize("full", [True, False])
-def test_config_writing_reading(full):
+@pytest.mark.parametrize("expand", [True, False])
+def test_config_writing_reading(full, expand):
     """ Test that reading/writing the same config will result in the same report """
 
     # Create report and save to config
@@ -15,12 +18,12 @@ def test_config_writing_reading(full):
     report1.add_slide("A text")                                     # test default
     report1.add_slide(["text1", "text2"], width_ratios=[0.8, 0.2])  # test list
     report1.add_slide(["text1", "text2"], split=True)               # test bool
-    report1.write_config("report1.json", full=full)
+    report1.write_config("report1.json", full=full, expand=expand)
 
     # Create new report with config
     report2 = PowerPointReport()
     report2.from_config("report1.json")
-    report2.write_config("report2.json", full=full)
+    report2.write_config("report2.json", full=full, expand=expand)
 
     # Assert that the written config is the same
     with open("report1.json", "r") as f:
@@ -36,7 +39,7 @@ def test_config_writing_reading(full):
 
 
 def test_get_config_global():
-    """ Test that get_config takes into account the current global parameters """
+    """ Test that get_config takes into account the current global parameters, in case they were added multiple times """
 
     # Create report
     report = PowerPointReport()
@@ -211,3 +214,19 @@ def test_pdf_output(pdf):
     if pdf:
         assert os.path.exists("test.pdf")
         os.remove("test.pdf")
+
+
+@pytest.mark.parametrize("expand", [True, False])
+def test_get_config(expand):
+    """ Test that get_config returns the correct config """
+
+    report = PowerPointReport()
+    report.add_slide(content_dir + "*_fish.jpg")
+
+    config = report.get_config(expand=expand)
+
+    if expand is True:
+        assert isinstance(config["slides"][0]["content"], list)
+        assert len(config["slides"][0]["content"]) == 3
+    else:
+        assert isinstance(config["slides"][0]["content"], str)  # not expanded
