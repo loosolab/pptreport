@@ -1,4 +1,4 @@
-from pptreport.classes import PowerPointReport
+from pptreport import PowerPointReport
 import pytest
 
 
