@@ -1,5 +1,5 @@
-[![coverage main](https://gitlab.gwdg.de/loosolab/software/pptreport/badges/main/coverage.svg)](https://gitlab.gwdg.de/loosolab/software/pptreport/-/commits/main)
-[![coverage dev](https://gitlab.gwdg.de/loosolab/software/pptreport/badges/dev/coverage.svg)](https://gitlab.gwdg.de/loosolab/software/pptreport/-/commits/dev)
+[![coverage main](https://gitlab.gwdg.de/loosolab/software/pptreport/badges/main/coverage.svg?key_text=coverage+main&key_width=100)](https://gitlab.gwdg.de/loosolab/software/pptreport/-/commits/main)
+[![coverage dev](https://gitlab.gwdg.de/loosolab/software/pptreport/badges/dev/coverage.svg?key_text=coverage+dev&key_width=100)](https://gitlab.gwdg.de/loosolab/software/pptreport/-/commits/dev)
 
 # pptreport - automatic creation of powerpoint presentations
 
