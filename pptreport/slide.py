@@ -95,8 +95,6 @@ class Slide():
             else:
                 raise ValueError(f"Invalid value for 'fill_by' parameter: '{self.fill_by}'. Please use 'row' or 'column'.")
 
-            layout_matrix = np.array(intarray).reshape((n_rows, n_columns))
-
         elif layout == "vertical":
             layout_matrix = np.array(list(range(n_elements))).reshape((n_elements, 1))
 
