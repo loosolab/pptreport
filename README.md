@@ -92,6 +92,7 @@ The example file at [examples/report_config.json](examples/report_config.json) g
 | split | bool | If number of elements in `content` is large, it might be beneficial to split the elements to separate slides. If `split` is True, every element in content is written to its own slide (and as such, the slide config actually expands to more than one slide). All other parameters (such as title) are equal for all expanded slides. The default is False, meaning that all content is placed into one slide. | False |
 | show_filename | bool | Filenames for images. If True, the filename of the image will be displayed above the image. Default is False. | True |
 | filename_alignment | string or list of strings | The horizontal alignment of the filename of an image within each content box. If a string is given, all filenames on the slide will be aligned in the same way. If a list of strings is given, the alignment strings correspond to the order of images in content, e.g. ["center", "left"] will align the first two filenames center and left, respectively. The default is "center", which will align the filename centered horizontally. | "left"<br />"center"<br />"right"<br />["center", "left"] |
+| fill_by | str | The order of filling the content into the grid. Default is "row", in which case the content is filled row-by-row depending on 'n_columns' or the custom layout. The other option is "column", in which case the content is filled column-by-column. | "row" |
 
 
 ## Source of example images
