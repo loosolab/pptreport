@@ -1,3 +1,6 @@
+[![coverage main](https://gitlab.gwdg.de/loosolab/software/pptreport/badges/main/coverage.svg?key_text=coverage+main&key_width=100)](https://gitlab.gwdg.de/loosolab/software/pptreport/-/commits/main)
+[![coverage dev](https://gitlab.gwdg.de/loosolab/software/pptreport/badges/dev/coverage.svg?key_text=coverage+dev&key_width=100)](https://gitlab.gwdg.de/loosolab/software/pptreport/-/commits/dev)
+
 # pptreport - automatic creation of powerpoint presentations
 
 The pptreport package is a tool for building powerpoint presentations using a configuration file of content such as pictures and text, or step-by-step during a script or jupyter notebook. 
@@ -66,6 +69,7 @@ The example file at [examples/report_config.json](examples/report_config.json) g
 | template |  string | This is the path to an optional template to use for the presentation, for example to use a specific slide design. The presentation is initialized with the slides of the presentation. In order to use the slide master exclusively, delete all slides from the presentation. | "mytemplate.pptx" |
 | size | string or list of length 2| If template is not given, size controls the size of the presentation. Can be "standard" (default), "widescreen", "a4-portait", "a4-landscape". Can also be a list of two numbers indicating [height, width] in cm, e.g. [21, 14.8] for A5 size. | "standard"
 | slides | list of dictionaries | This key contains a list of configuration dictionaries. Each dictionary corresponds to one slide in the presentation. | See configuration of slide keys below. |  
+| global_parameters | dictionary | A dictionary containing slide keys (see below), which will be global across all slides. These will be overwritten by any specific configuration given per slide. | {"inner_margin": 0} |
 
 <br />
 <br />
@@ -75,9 +79,11 @@ The example file at [examples/report_config.json](examples/report_config.json) g
 | Key | Type | Description | Examples |
 | --- | ---- | ------- | ------ |
 | content | list of strings | List of content to be added to the slide. These can be a paths to files (either image or text) or strings to directly write to a text box. If the string contains "*", files matching the pattern will be found. | ["imagefile.png"]<br />["image\*.png"]<br />["Some text", "Additional text"]<br />["file.txt", "image.jpg"] |
+| grouped_content | list of regex patterns | A list of regex patterns with groups. This option can be used inplace of 'content' to create slides with images per regex group. A regex group is given with parenthesis, e.g. if we have a list of heatmaps and scatterplots for a number of samples, we can create per-sample grouped slides using: grouped_content = ["heatmap_sample([0-9]+).png", "scatter_sample([0-9]+).png"]. If no "title" is given, the default slide title is "Group: \<regex-group-name\>". Note: the option "split=True" is not valid when grouped_content is given. | ["image1_(.+).png", "image2_(.+).png"] |
 | title | str | The text to put in the placeholder for "title" on the slide. | "My title" |
 | slide_layout | int or string| If an integer, this represents which master slide to be used for the layout. The numbering starts at 0, which is usually the title slide layout. The default is 1, which is usually a content slide with a title placeholder. However, note that this numbering depends on the template used. If 'slide_layout' is a string, the layout with that name is used. | 1<br />"Title Slide" |
 | content_layout | string or list of ints | The layout of the content within the slide. Options are:<br />\- "grid" (default): This places the content into a grid with `n_columns` columns.<br />\- "vertical": Places content into one vertical column.<br />\- "Horizonzal": Places contents into one horizontal row.<br /><br />The layout can also be specified as an array of integers, where each integer _i_ specified the _i_'th element in 'contents'. Numbering starts at 0. For example: <br />`[[0,0,0],`<br /> ` [1,1,2]]` <br /> describes a layout where the first element in contents is placed in the first row, the second is placed in the second row spanning two columns, and the third element in contents is placed in the lower right corner. Use '-1' to keep a position empty.  | "grid" |
+| content_alignment | string or list of strings | The alignment of content within each content box. Can be vertical-horizontal combinations of "upper", "lower", "left", "right" and "center". If a string is given, all content on the slide will be aligned in the same way. If a list of strings is given, the alignment strings correspond to the order of elements in content, e.g. ["center", "left"] will align the first two elements center and left, respectively. The default is "center", which will align the content centered both vertically and horizontally. | "upper left"<br />"center"<br />"lower right"<br />["center", "left"] |
 | n_columns | int | If "content_layout" is "grid", this integer controls how many columns to split the contents into. Default is 2. | 2 |
 | outer_margin | float | The margin between slide border and the content. Default is 2 (cm). | 2<br />1.5 |
 | inner_margin | float | The margin between the individual elements of contents. Default 1 (cm). | 1<br />0.5 |
@@ -85,6 +91,10 @@ The example file at [examples/report_config.json](examples/report_config.json) g
 | height_ratios | list of floats | This list of values, which must have the same length as the number of rows, controls the height of individual content rows. For example, `height_ratios=[2,1]` sets the first row to double the height of the second row. Default is that every row has equal height. | [0.1, 0.9]<br />[2, 2, 1] |
 | notes | str | This string gives the path to a file, or the direct string, which should be added to the "notes" section of the slide. | "This text will be in notes"<br />"notes.txt" | 
 | split | bool | If number of elements in `content` is large, it might be beneficial to split the elements to separate slides. If `split` is True, every element in content is written to its own slide (and as such, the slide config actually expands to more than one slide). All other parameters (such as title) are equal for all expanded slides. The default is False, meaning that all content is placed into one slide. | False |
+| show_filename | bool | Filenames for images. If True, the filename of the image will be displayed above the image. Default is False. | True |
+| filename_alignment | string or list of strings | The horizontal alignment of the filename of an image within each content box. If a string is given, all filenames on the slide will be aligned in the same way. If a list of strings is given, the alignment strings correspond to the order of images in content, e.g. ["center", "left"] will align the first two filenames center and left, respectively. The default is "center", which will align the filename centered horizontally. | "left"<br />"center"<br />"right"<br />["center", "left"] |
+| fill_by | str | The order of filling the content into the grid. Default is "row", in which case the content is filled row-by-row depending on 'n_columns' or the custom layout. The other option is "column", in which case the content is filled column-by-column. | "row" |
+| remove_placeholders | bool | Whether to remove empty placeholders from the slide, e.g. if title is not given, powerpoint will show an empty text box. Default is False; to keep all placeholders. If True, empty placeholders will be removed. | True |
 
 
 ## Source of example images
