@@ -84,7 +84,8 @@ notebooks:
     - conda activate pptreport
     - python -m ipykernel install --user --name pptreport
     - cd examples
-    - papermill --log-output write_report.ipynb out.ipynb -k pptreport
+    - pptreport --config report_config.json --output report.pptx        # test that commandline interface is working
+    - papermill --log-output write_report.ipynb out.ipynb -k pptreport  # test notebooks
   rules:
     - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
 

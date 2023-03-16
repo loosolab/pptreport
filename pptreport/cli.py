@@ -1,7 +1,7 @@
 import sys
 import argparse
 from pptreport import __version__ as pptreport_version
-from pptreport.classes import PowerPointReport
+from pptreport import PowerPointReport
 
 
 def main():
