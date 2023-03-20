@@ -367,91 +367,85 @@ class Box():
 
         Parameters
         ----------
-        p:<pptx.text.text._Paragraph>
+        p : <pptx.text.text._Paragraph>
             paragraph to add to
         text : str
             The text to be added to the box.
         """
         # mistune is only needed for md, only import if needed
-        try:
-            import mistune
-        except ModuleNotFoundError:
-            raise ImportError("mistune not install. Please install via `pip3 install mistune`")
+        import mistune
 
         # render input as html.ast
         markdown = mistune.create_markdown(renderer="ast")
 
         # traverse the tree
-        for par in markdown(text):
-            if par["type"] == "paragraph":
-                if p.text != "":
-                    run = p.add_run()
-                    run.text = "\n"
-                for child in par["children"]:  # children are the single md elements like bold, italic,...
-                    # italic
-                    if child["type"] == "emphasis":
+        for string in text.split("\n"):
+            for i, par in enumerate(markdown(string)):
+                if par["type"] == "paragraph":
+
+                    # Add newlines between paragraphs
+                    if i > 0:
                         run = p.add_run()
-                        run.font.bold = False
-                        run.font.italic = True
-                        run.text = self._get_text_all_children(child)
-                    # bold
-                    elif child["type"] == "strong":
-                        run = p.add_run()
-                        run.text = self._get_text_all_children(child)
-                        run.font.bold = True
-                        run.font.italic = False
-                    # link
-                    elif child["type"] == "link":
-                        run = p.add_run()
-                        run.text = self._get_text_all_children(child)
-                        hlink = run.hyperlink
-                        hlink.address = child["link"]
-                        run.font.bold = False
-                        run.font.italic = False
-                    # alternative text for images
-                    elif child["type"] == "image":
-                        try:
-                            print("markdown images not supported. Trying alternative text.")
-                            text = child["alt"]
+                        run.text = "\n"
+
+                    for child in par["children"]:  # children are the single md elements like bold, italic,...
+                        # italic
+                        if child["type"] == "emphasis":
+                            run = p.add_run()
+                            run.font.italic = True
+                            run.text = self._get_text_all_children(child)
+                        # bold
+                        elif child["type"] == "strong":
+                            run = p.add_run()
+                            run.text = self._get_text_all_children(child)
+                            run.font.bold = True
+                        # link
+                        elif child["type"] == "link":
+                            run = p.add_run()
+                            run.text = self._get_text_all_children(child)
+                            hlink = run.hyperlink
+                            hlink.address = child["link"]
+                        # alternative text for images
+                        elif child["type"] == "image":
+                            try:
+                                print("markdown images not supported. Trying alternative text.")
+                                text = child["alt"]
+                                run = p.add_run()
+                                run.text = text
+                            except KeyError:
+                                print("No alternative text given. Skipping entry.")
+                        # codespan
+                        # elif child["type"]=="codespan":
+                        # plain text & default case
+                        else:
+                            try:
+                                text = child["text"]
+                            except KeyError:
+                                print("Unknown child type. Trying to append children's content as plain text.")
+                                try:
+                                    text = self._get_text_all_children(child)
+                                except KeyError:
+                                    print(f"Child type {child['type']} is not supported.")
+                                    continue  # continue with next child
                             run = p.add_run()
                             run.text = text
-                            run.font.bold = False
-                            run.font.italic = False
-                        except KeyError:
-                            print("No alternative text given. Skipping entry.")
-                    # codespan
-                    # elif child["type"]=="codespan":
-                    # plain text & default case
-                    else:
-                        try:
-                            text = child["text"]
-                        except KeyError:
-                            print("Unknown child type. Trying to append children's content as plain text.")
-                            try:
-                                text = self._get_text_all_children(child)
-                            except KeyError:
-                                print(f"Child type {child['type']} is not supported.")
-                                continue  # continue with next child
-                        run = p.add_run()
-                        run.text = text
-                        run.font.bold = False
-                        run.font.italic = False
 
-            elif par["type"] == "heading":
-                # implement heading (bold, bigger) ? Or add it only as plain txt
-                pass
-            elif par["type"] == "list":
-                print(par)
-                # implement list
-                pass
-            else:
-                # will be handled in paragraph > codespan/link/block_code (they have duplicate entries in the tree)
-                pass
+                elif par["type"] == "newline":
+                    run = p.add_run()
+                    run.text = "\n\n"  # newline for previous line + newline for new paragraph
 
-        # resize_text(txt_frame)
-        # txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE  # An additional step of resizing text to fit the box
+                elif par["type"] == "heading":
+                    # implement heading (bold, bigger) ? Or add it only as plain txt
+                    pass
 
-    def fill_text(self, text, is_filename=False, md=False):
+                elif par["type"] == "list":
+                    # implement list
+                    pass
+                else:
+                    # will be handled in paragraph > codespan/link/block_code (they have duplicate entries in the tree)
+                    pass
+
+    def fill_text(self, text, is_filename=False):
         """
         Fill the box with text.
 
