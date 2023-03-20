@@ -153,7 +153,8 @@ class PowerPointReport():
             "split": False,
             "show_filename": False,
             "filename_alignment": "center",
-            "fill_by": "row"
+            "fill_by": "row",
+            "remove_placeholders": False,
         }
 
     def setup_logger(self, verbosity=1):
@@ -323,6 +324,7 @@ class PowerPointReport():
                   show_filename=None,
                   filename_alignment=None,
                   fill_by=None,
+                  remove_placeholders=None,
                   ):
         """
         Add a slide to the presentation.
@@ -367,6 +369,8 @@ class PowerPointReport():
             The default is "center", which will align the content centered horizontally.
         fill_by : str, default "row"
             If slide_layout is grid or custom, choose to fill the grid row-by-row or column-by-column. 'fill_by' can be "row" or "column".
+        remove_placeholders : str, default False
+            Whether to remove empty placeholders from the slide, e.g. if title is not given. Default is False; to keep all placeholders. If True, empty placeholders will be removed.
         """
 
         # Get input parameters
