@@ -4,6 +4,17 @@ import pytest
 content_dir = "examples/content/"
 
 
+def test_title_slide():
+    """ Test that title slide is added correctly """
+
+    report = PowerPointReport()
+    report.add_title_slide(title="Title", subtitle="Subtitle")
+    slide = report._slides[0]
+
+    assert slide._slide.shapes[0].text == "Title"
+    assert slide._slide.shapes[1].text == "Subtitle"
+
+
 @pytest.mark.parametrize("fill_by, valid", [("row", True),
                                             ("column", True),
                                             ("invalid", False)])
@@ -28,7 +39,9 @@ def test_fill_by(fill_by, valid):
             report.add_slide(content, fill_by=fill_by)
 
 
-@pytest.mark.parametrize("options", [{"n_columns": "a lot"},
+@pytest.mark.parametrize("options", [{"content": ["text"], "grouped_content": ["text"]},    # both content and grouped_content given
+                                     {"content": None, "split": True},   # content has to given when split is True
+                                     {"n_columns": "a lot"},
                                      {"show_filename": "invalid"},
                                      {"split": "invalid"}])
 def test_invalid_input(options):
@@ -36,7 +49,11 @@ def test_invalid_input(options):
 
     report = PowerPointReport()
     with pytest.raises(ValueError):
-        report.add_slide(content_dir + "cat.jpg", **options)
+
+        if "content" not in options and "grouped_content" not in options:
+            options["content"] = content_dir + "cat.jpg"
+
+        report.add_slide(**options)
 
 
 @pytest.mark.parametrize("show_filename", [True, False, "True", "False"])

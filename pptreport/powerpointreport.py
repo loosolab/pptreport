@@ -296,7 +296,7 @@ class PowerPointReport():
         """
 
         self.add_slide(title=title, slide_layout=layout)
-        slide = self._slides[-1]
+        slide = self._slides[-1]._slide  # pptx slide object
 
         # Fill placeholders
         if subtitle is not None:
