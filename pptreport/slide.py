@@ -22,13 +22,6 @@ class Slide():
 
         parameters = parameters.copy()  # Make a copy to not change the original dict
 
-        # Format "n_columns" to int
-        if "n_columns" in parameters:  # hasattr(self, "n_columns"):
-            try:
-                parameters["n_columns"] = int(parameters["n_columns"])
-            except ValueError:
-                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
-
         # Format "split" to bool
         if "split" in parameters:
             split = parameters["split"]
@@ -73,6 +66,12 @@ class Slide():
     def set_layout_matrix(self):
         """ Get the content layout matrix for the slide. """
 
+        # Check validity of n_columns
+        try:
+            self.n_columns = int(self.n_columns)
+        except ValueError:
+            raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{self.n_columns}'. Please use an integer.")
+
         # Get variables from self
         layout = self.content_layout
         n_elements = len(self.content)
@@ -109,6 +108,53 @@ class Slide():
 
         self._layout_matrix = layout_matrix
 
+    # ------------------------ Validate options ------------------------#
+    def _validate_margins(self):
+        """ Check whether the given margins are valid """
+
+        margins = {"outer_margin": self.outer_margin, "inner_margin": self.inner_margin, "left_margin": self.left_margin, "right_margin": self.right_margin,
+                   "top_margin": self.top_margin, "bottom_margin": self.bottom_margin}
+
+        for margin, value in margins:
+            if value is not None:
+
+                # Check whether value is a float
+                try:
+                    margin, value = float(value)
+                    setattr(self, margin, value)
+                except ValueError:
+                    raise ValueError(f"Could not convert '{margin}' to a float. The given value is: {value}")
+
+                # Check whether value is positive
+                if value < 0:
+                    raise ValueError(f"Margin '{margin}' cannot be negative. The given value is: {value}")
+
+                # Check upper margin sizes
+
+    def _validate_ratios(self):
+        """ Validate the values of width and height ratios """
+
+        parameters = ["width_ratios", "height_ratios"]
+
+        for param in parameters:
+
+            value = getattr(self, param)
+
+            # Convert from string to list
+            if isinstance(value, str):
+                try:
+                    value = [v for v in value.split(",")]
+                except ValueError:
+                    raise ValueError(f"Could not convert '{param}' parameter to list of values. The given value is: '{value}'. Please use a list of values.")
+
+            # Convert from list of strings to list of floats
+            try:
+                value = [float(v) for v in value]
+            except Exception:
+                raise ValueError(f"Could not convert '{param}' parameter to list of values. The given value is: '{value}'. Please use a list of values.")
+
+            setattr(self, value)  # Set the new value
+
     # -------------------  Fill slide with content  ------------------- #
     def _fill_slide(self):
         """ Fill the slide with content from the internal variables """
@@ -130,6 +176,12 @@ class Slide():
         """ Set the title of the slide. Requires self.title to be set. """
 
         if self.title is not None:
+
+            # Make sure that title is a string
+            try:
+                self.title = str(self.title)
+            except Exception:
+                raise ValueError(f"Could not convert 'title' to a string. The given value is: '{self.title}'.")
 
             if self._slide.shapes.title is None:
                 self.logger.warning("Could not set title of slide. The slide does not have a title box.")
@@ -165,6 +217,9 @@ class Slide():
         layout_matrix = self._layout_matrix
         nrows, ncols = layout_matrix.shape
 
+        # Check that margins are valid
+        self._validate_margins()
+
         # Establish left/right/top/bottom margins (in cm)
         left_margin = self.outer_margin if self.left_margin is None else self.left_margin
         right_margin = self.outer_margin if self.right_margin is None else self.right_margin
@@ -181,9 +236,6 @@ class Slide():
         # Add to top margin based on size of title
         if self._slide.shapes.title.text != "":
             top_margin_unit = self._slide.shapes.title.top + self._slide.shapes.title.height + top_margin_unit
-        # else:
-        #    sp = self._slide.shapes.title.element
-        #    sp.getparent().remove(sp) # remove title box if title is empty
 
         # How many columns and rows are there?
         n_rows, n_cols = layout_matrix.shape
@@ -192,7 +244,10 @@ class Slide():
         total_width = self._slide_width - left_margin_unit - right_margin_unit - (n_cols - 1) * inner_margin_unit
         total_height = self._slide_height - top_margin_unit - bottom_margin_unit - (n_rows - 1) * inner_margin_unit
 
+        # Check if total_width < 0
+
         # Get column widths and row heights
+        self._validate_ratios()
         if self.width_ratios is None:
             widths = (np.ones(ncols) / ncols) * total_width
         else:
