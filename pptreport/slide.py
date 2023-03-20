@@ -13,45 +13,7 @@ class Slide():
         self._boxes = []     # Boxes in the slide
         self.logger = None
 
-        parameters = self.format_parameters(parameters)
         self.add_parameters(parameters)
-
-    @staticmethod
-    def format_parameters(parameters):
-        """ Checks and formats specific slide parameters to the correct type. """
-
-        parameters = parameters.copy()  # Make a copy to not change the original dict
-
-        # Format "n_columns" to int
-        if "n_columns" in parameters:  # hasattr(self, "n_columns"):
-            try:
-                parameters["n_columns"] = int(parameters["n_columns"])
-            except ValueError:
-                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
-
-        # Format "split" to bool
-        if "split" in parameters:
-            split = parameters["split"]
-            if isinstance(split, str):
-                if split.lower() in ["true", "1", "t", "y", "yes"]:
-                    parameters["split"] = True
-                elif split.lower() in ["false", "0", "f", "n", "no"]:
-                    parameters["split"] = False
-                else:
-                    raise ValueError(f"Could not convert 'split' parameter to bool. The given value is: '{split}'. Please use 'True' or 'False'.")
-
-        # Format "show_filename" to bool
-        if "show_filename" in parameters:
-            show_filename = parameters["show_filename"]
-            if isinstance(show_filename, str):
-                if show_filename.lower() in ["true", "1", "t", "y", "yes"]:
-                    parameters["show_filename"] = True
-                elif show_filename.lower() in ["false", "0", "f", "n", "no"]:
-                    parameters["show_filename"] = False
-                else:
-                    raise ValueError(f"Could not convert 'show_filename' parameter to bool. The given value is: '{show_filename}'. Please use 'True' or 'False'.")
-
-        return parameters
 
     def add_parameters(self, parameters):
         """ Add parameters to the slide as internal variables. """
@@ -247,7 +209,7 @@ class Slide():
         box.logger = self.logger  # share logger with box
 
         # Add specific parameters to box
-        keys = ["content_alignment", "show_filename", "filename_alignment"]
+        keys = ["content_alignment", "show_filename", "filename_alignment", "filename_path", "fontsize"]
         parameters = {key: getattr(self, key) for key in keys}
         box.add_parameters(parameters)
 
