@@ -51,7 +51,6 @@ tests:
   script:
     - pip install pytest
     - pip install pytest-cov
-    - apt -y install libreoffice  # needed for pdf test
     - pytest --cov-report=term --cov=pptreport  --junitxml=pytest.xml --cov-report html:htmlcov .
   artifacts:
     when: always

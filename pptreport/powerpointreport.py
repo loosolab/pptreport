@@ -726,37 +726,48 @@ class PowerPointReport():
 
         self._prs.save(filename)
 
+        # Save presentation as pdf
+        if pdf:
+            self._save_pdf(filename)
+
         # Remove borders again
         if show_borders is True:
             self.remove_borders()  # Remove borders again
 
+    # not included in tests due to libreoffice dependency
+    def _save_pdf(self, filename):  # pragma: no cover
+        """
+        Save presentation as pdf.
+
+        Parameters
+        ----------
+        filename : str
+            Filename of the presentation in pptx format. The pdf will be saved with the same basename.
+        """
+        self.logger.info("Additionally saving presentation as .pdf")
+
+        # Check if libreoffice is installed
+        is_installed = False
+        try:
+            self.logger.debug("Checking if libreoffice is installed...")
+            result = subprocess.run(["libreoffice", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.logger.debug("Version of libreoffice: " + result.stdout.rstrip())
+            is_installed = True
+
+        except FileNotFoundError:
+            self.logger.error("Option 'pdf' is set to True, but LibreOffice could not be found on path. Please install LibreOffice to save presentations as pdf.")
+
         # Save presentation as pdf
-        if pdf:
+        if is_installed:
 
-            self.logger.info("Additionally saving presentation as .pdf")
+            outdir = os.path.dirname(filename)
+            outdir = "." if outdir == "" else outdir  # outdir cannot be empty
 
-            # Check if libreoffice is installed
-            is_installed = False
-            try:
-                self.logger.debug("Checking if libreoffice is installed...")
-                result = subprocess.run(["libreoffice", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                self.logger.debug("Version of libreoffice: " + result.stdout.rstrip())
-                is_installed = True
+            cmd = f"libreoffice --headless --invisible --convert-to pdf --outdir {outdir} {filename}"
+            self.logger.debug("Running command: " + cmd)
 
-            except FileNotFoundError:
-                self.logger.error("Option 'pdf' is set to True, but LibreOffice could not be found on path. Please install LibreOffice to save presentations as pdf.")
-
-            # Save presentation as pdf
-            if is_installed:
-
-                outdir = os.path.dirname(filename)
-                outdir = "." if outdir == "" else outdir  # outdir cannot be empty
-
-                cmd = f"libreoffice --headless --invisible --convert-to pdf --outdir {outdir} {filename}"
-                self.logger.debug("Running command: " + cmd)
-
-                process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                while process.poll() is None:
-                    line = process.stdout.readline().rstrip()
-                    if line != "":
-                        self.logger.debug("Command output: " + line)
+            process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            while process.poll() is None:
+                line = process.stdout.readline().rstrip()
+                if line != "":
+                    self.logger.debug("Command output: " + line)
