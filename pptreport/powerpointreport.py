@@ -49,7 +49,7 @@ def glob_files(lst):
     content = []  # flattened list of files
     files = []  # names of files in the list
     for element in lst:
-        if "*" in element:
+        if element is not None and "*" in element:
             globbed = glob.glob(element)
             if len(globbed) > 0:
                 for file in globbed:
