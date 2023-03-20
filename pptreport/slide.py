@@ -128,6 +128,7 @@ class Slide():
 
         # Fill boxes with content
         if len(self.content) > 0:
+            self.logger.debug(f"Filling slide with content: {self.content}")
             self.set_layout_matrix()
             self.create_boxes()       # Create boxes based on layout
             self.fill_boxes()         # Fill boxes with content

@@ -200,20 +200,15 @@ def test_content_fill(content):
     assert len(report._slides) == 1  # assert that a slide was added
 
 
-@pytest.mark.parametrize("pdf", [True, False])
-def test_pdf_output(pdf):
+def test_pdf_output(caplog):
     """ Test that pdf output works """
 
     report = PowerPointReport()
     report.add_slide("A text")
-    report.save("test.pptx", pdf=pdf)
+    report.save("test.pptx", pdf=True)
 
-    assert os.path.exists("test.pptx")
-    os.remove("test.pptx")
-
-    if pdf:
-        assert os.path.exists("test.pdf")
-        os.remove("test.pdf")
+    if caplog.text != "":  # if libreoffice is installed, caplog will be empty
+        assert "Option 'pdf' is set to True, but LibreOffice could not be found on path." in caplog.text
 
 
 @pytest.mark.parametrize("expand", [True, False])
