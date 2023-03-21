@@ -120,6 +120,31 @@ def replace_quotes(string):
 ###############################################################################
 
 class PowerPointReport():
+    """ Class for building a PowerPoint presentation """
+
+    _default_slide_parameters = {
+        "title": None,
+        "slide_layout": 1,
+        "content_layout": "grid",
+        "content_alignment": "center",
+        "outer_margin": 2,
+        "inner_margin": 1,
+        "left_margin": None,
+        "right_margin": None,
+        "top_margin": None,
+        "bottom_margin": None,
+        "n_columns": 2,
+        "width_ratios": None,
+        "height_ratios": None,
+        "notes": None,
+        "split": False,
+        "show_filename": False,
+        "filename_alignment": "center",
+        "filename_path": False,
+        "fill_by": "row",
+        "remove_placeholders": False,
+        "fontsize": None
+    }
 
     def __init__(self, template=None, size="standard", verbosity=0):
         """ Initialize a presentation object using an existing presentation (template) or from scratch (default) """
@@ -133,29 +158,6 @@ class PowerPointReport():
 
         self.logger.info("Initializing presentation")
         self._initialize_presentation()
-
-        # Default slide parameters
-        self._default_slide_parameters = {
-            "title": None,
-            "slide_layout": 1,
-            "content_layout": "grid",
-            "content_alignment": "center",
-            "outer_margin": 2,
-            "inner_margin": 1,
-            "left_margin": None,
-            "right_margin": None,
-            "top_margin": None,
-            "bottom_margin": None,
-            "n_columns": 2,
-            "width_ratios": None,
-            "height_ratios": None,
-            "notes": None,
-            "split": False,
-            "show_filename": False,
-            "filename_alignment": "center",
-            "fill_by": "row",
-            "remove_placeholders": False,
-        }
 
     def setup_logger(self, verbosity=1):
         """
@@ -317,6 +319,26 @@ class PowerPointReport():
             else:
                 parameters[k] = v  # overwrite previously set top/bottom/left/right margins if they are explicitly given
 
+        # Format "n_columns" to int
+        if "n_columns" in parameters:
+            try:
+                parameters["n_columns"] = int(parameters["n_columns"])
+            except ValueError:
+                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
+
+        # Format boolean parameters to bool
+        bool_parameters = [key for key, value in self._default_slide_parameters.items() if isinstance(value, bool)]
+        for param in bool_parameters:
+            if param in parameters:
+                value = parameters[param]
+                if isinstance(value, str):
+                    if value.lower() in ["true", "1", "t", "y", "yes"]:
+                        parameters[param] = True
+                    elif value.lower() in ["false", "0", "f", "n", "no"]:
+                        parameters[param] = False
+                    else:
+                        raise ValueError(f"Could not convert '{param}' parameter to bool. The given value is: '{value}'. Please use 'True' or 'False'.")
+
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
         Add a title slide to the presentation.
@@ -359,8 +381,10 @@ class PowerPointReport():
                   split=None,
                   show_filename=None,
                   filename_alignment=None,
+                  filename_path=None,
                   fill_by=None,
                   remove_placeholders=None,
+                  fontsize=None,
                   ):
         """
         Add a slide to the presentation.
@@ -403,13 +427,17 @@ class PowerPointReport():
         filename_alignment : str, default "center"
             Horizontal alignment of the filename. Can be "left", "right" and "center".
             The default is "center", which will align the content centered horizontally.
+        filename_path : bool, default False
+            Whether to show the full path of the filename or just the filename. Default is False, which will only show the filename.
         fill_by : str, default "row"
             If slide_layout is grid or custom, choose to fill the grid row-by-row or column-by-column. 'fill_by' can be "row" or "column".
         remove_placeholders : str, default False
             Whether to remove empty placeholders from the slide, e.g. if title is not given. Default is False; to keep all placeholders. If True, empty placeholders will be removed.
+        fontsize : float, default None
+            Fontsize of text content. If None, the fontsize is automatically determined to fit the text in the textbox.
         """
 
-        # Get input parameters
+        # Get input parameters; all function defaults are None to distinguish between given arguments and global defaults
         parameters = locals()
         parameters = {k: v for k, v in parameters.items() if v is not None}
         parameters.pop("self")
@@ -454,8 +482,27 @@ class PowerPointReport():
         n_slides = len(self._slides)
         self.logger.info("Adding slide {}".format(n_slides + 1))
 
-        # Get layout object from presentation
+        # Add slide to python-pptx presentation
         slide_layout = parameters.get("slide_layout", 0)
+        layout_obj = self._get_slide_layout(slide_layout)
+        slide_obj = self._prs.slides.add_slide(layout_obj)
+
+        # Add slide to list of slides in internal object
+        slide = Slide(slide_obj, parameters)
+        slide.logger = self.logger
+
+        # Add information from presentation to slide
+        slide._default_parameters = self._default_slide_parameters
+        slide._slide_height = self._prs.slide_height
+        slide._slide_width = self._prs.slide_width
+
+        self._slides.append(slide)
+
+        return slide
+
+    def _get_slide_layout(self, slide_layout):
+        """ Get the slide layout object from a given layout. """
+
         if isinstance(slide_layout, int):
             try:
                 layout_obj = self._prs.slide_layouts[slide_layout]
@@ -472,21 +519,7 @@ class PowerPointReport():
         else:
             raise TypeError("Layout should be an integer or a string.")
 
-        # Add slide to python-pptx presentation
-        slide_obj = self._prs.slides.add_slide(layout_obj)
-
-        # Add slide to list of slides in internal object
-        slide = Slide(slide_obj, parameters)
-        slide.logger = self.logger
-
-        # Add information from presentation to slide
-        slide._default_parameters = self._default_slide_parameters
-        slide._slide_height = self._prs.slide_height
-        slide._slide_width = self._prs.slide_width
-
-        self._slides.append(slide)
-
-        return slide
+        return layout_obj
 
     def _get_content(self, parameters):
         """ Get slide content based on input parameters. """

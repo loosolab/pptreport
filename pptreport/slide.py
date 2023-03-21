@@ -15,35 +15,7 @@ class Slide():
         self._boxes = []     # Boxes in the slide
         self.logger = None
 
-        parameters = self.format_parameters(parameters)
         self.add_parameters(parameters)
-
-    @staticmethod
-    def format_parameters(parameters):
-        """ Checks and formats specific slide parameters to the correct type. """
-
-        parameters = parameters.copy()  # Make a copy to not change the original dict
-
-        # Format "n_columns" to int
-        if "n_columns" in parameters:
-            try:
-                parameters["n_columns"] = int(parameters["n_columns"])
-            except ValueError:
-                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
-
-        # Format "split" and "show_filename" to bool
-        for key in ["split", "show_filename"]:
-            if key in parameters:
-                value = parameters[key]
-                if isinstance(value, str):
-                    if value.lower() in ["true", "1", "t", "y", "yes"]:
-                        parameters[key] = True
-                    elif value.lower() in ["false", "0", "f", "n", "no"]:
-                        parameters[key] = False
-                    else:
-                        raise ValueError(f"Could not convert '{key}' parameter to bool. The given value is: '{value}'. Please use 'True' or 'False'.")
-
-        return parameters
 
     def add_parameters(self, parameters):
         """ Add parameters to the slide as internal variables. """
@@ -258,7 +230,7 @@ class Slide():
         box.logger = self.logger  # share logger with box
 
         # Add specific parameters to box
-        keys = ["content_alignment", "show_filename", "filename_alignment"]
+        keys = ["content_alignment", "show_filename", "filename_alignment", "filename_path", "fontsize"]
         parameters = {key: getattr(self, key) for key in keys}
         box.add_parameters(parameters)
 
