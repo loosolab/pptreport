@@ -126,7 +126,7 @@ class Slide():
                 raise ValueError(f"Could not convert '{param}' parameter to list of values. The given value is: '{value}'. Please use a list of values.")
 
             setattr(self, value)  # Set the new value
-            
+
     @staticmethod
     def _validate_layout(layout_matrix):
         """ Validate the given layout matrix. """
