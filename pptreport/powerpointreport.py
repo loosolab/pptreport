@@ -51,7 +51,7 @@ def glob_files(lst):
     content = []  # flattened list of files
     files = []  # names of files in the list
     for element in lst:
-        if "*" in element:
+        if element is not None and "*" in element:
             globbed = glob.glob(element)
             if len(globbed) > 0:
                 for file in globbed:
@@ -122,6 +122,32 @@ def replace_quotes(string):
 ###############################################################################
 
 class PowerPointReport():
+    """ Class for building a PowerPoint presentation """
+
+    _default_slide_parameters = {
+        "title": None,
+        "slide_layout": 1,
+        "content_layout": "grid",
+        "content_alignment": "center",
+        "outer_margin": 2,
+        "inner_margin": 1,
+        "left_margin": None,
+        "right_margin": None,
+        "top_margin": None,
+        "bottom_margin": None,
+        "n_columns": 2,
+        "width_ratios": None,
+        "height_ratios": None,
+        "notes": None,
+        "split": False,
+        "show_filename": False,
+        "filename_alignment": "center",
+        "filename_path": False,
+        "fill_by": "row",
+        "remove_placeholders": False,
+        "fontsize": None,
+        "pdf_pages": "all"
+    }
 
     def __init__(self, template=None, size="standard", verbosity=0):
         """ Initialize a presentation object using an existing presentation (template) or from scratch (default) """
@@ -135,30 +161,6 @@ class PowerPointReport():
 
         self.logger.info("Initializing presentation")
         self._initialize_presentation()
-
-        # Default slide parameters
-        self._default_slide_parameters = {
-            "title": None,
-            "slide_layout": 1,
-            "content_layout": "grid",
-            "content_alignment": "center",
-            "outer_margin": 2,
-            "inner_margin": 1,
-            "left_margin": None,
-            "right_margin": None,
-            "top_margin": None,
-            "bottom_margin": None,
-            "n_columns": 2,
-            "width_ratios": None,
-            "height_ratios": None,
-            "notes": None,
-            "split": False,
-            "show_filename": False,
-            "filename_alignment": "center",
-            "fill_by": "row",
-            "remove_placeholders": False,
-            "pdf_pages": "all",
-        }
 
     def setup_logger(self, verbosity=1):
         """
@@ -235,12 +237,25 @@ class PowerPointReport():
             else:
                 self._default_slide_parameters[k] = v
 
+            if k == "outer_margin":
+                self._default_slide_parameters["left_margin"] = v
+                self._default_slide_parameters["right_margin"] = v
+                self._default_slide_parameters["top_margin"] = v
+                self._default_slide_parameters["bottom_margin"] = v
+
         # Add to internal config dict
         self._config_dict["global_parameters"] = parameters
 
     def add_to_config(self, parameters):
-        """ Add the slide parameters to the config file """
+        """ Add the slide parameters to the config file.
 
+        Parameters
+        ----------
+        parameters : dict
+            The parameters for the slide.
+        """
+
+        parameters = parameters.copy()  # ensure that later changes in parameters are not reflected in the config dict
         if "slides" not in self._config_dict:
             self._config_dict["slides"] = []
 
@@ -259,7 +274,7 @@ class PowerPointReport():
         if isinstance(size, tuple):
             if len(size) != 2:
                 raise ValueError("Size tuple must be of length 2.")
-
+            size = [float(s) for s in size]  # convert eventual strings to floats
             h, w = Cm(size[0]), Cm(size[1])
 
         elif size == "standard":
@@ -284,6 +299,49 @@ class PowerPointReport():
     # ------------- Functions for adding slides ------------ #
     # ------------------------------------------------------ #
 
+    def _validate_parameters(self, parameters):
+        """ Check the format of the input parameters for the slide and return an updated dictionary. """
+
+        # Establish if content or grouped_content was given
+        if "content" in parameters and "grouped_content" in parameters:
+            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
+
+        # If split is given, content should be given
+        if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
+            raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
+
+        # Set outer margin -> left/right/top/bottom
+        for k in list(parameters.keys()):
+            v = parameters[k]
+
+            if k == "outer_margin":
+                parameters["left_margin"] = v
+                parameters["right_margin"] = v
+                parameters["top_margin"] = v
+                parameters["bottom_margin"] = v
+            else:
+                parameters[k] = v  # overwrite previously set top/bottom/left/right margins if they are explicitly given
+
+        # Format "n_columns" to int
+        if "n_columns" in parameters:
+            try:
+                parameters["n_columns"] = int(parameters["n_columns"])
+            except ValueError:
+                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
+
+        # Format boolean parameters to bool
+        bool_parameters = [key for key, value in self._default_slide_parameters.items() if isinstance(value, bool)]
+        for param in bool_parameters:
+            if param in parameters:
+                value = parameters[param]
+                if isinstance(value, str):
+                    if value.lower() in ["true", "1", "t", "y", "yes"]:
+                        parameters[param] = True
+                    elif value.lower() in ["false", "0", "f", "n", "no"]:
+                        parameters[param] = False
+                    else:
+                        raise ValueError(f"Could not convert '{param}' parameter to bool. The given value is: '{value}'. Please use 'True' or 'False'.")
+
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
         Add a title slide to the presentation.
@@ -299,7 +357,7 @@ class PowerPointReport():
         """
 
         self.add_slide(title=title, slide_layout=layout)
-        slide = self._slides[-1]
+        slide = self._slides[-1]._slide  # pptx slide object
 
         # Fill placeholders
         if subtitle is not None:
@@ -326,8 +384,10 @@ class PowerPointReport():
                   split=None,
                   show_filename=None,
                   filename_alignment=None,
+                  filename_path=None,
                   fill_by=None,
                   remove_placeholders=None,
+                  fontsize=None,
                   pdf_pages=None
                   ):
         """
@@ -371,28 +431,31 @@ class PowerPointReport():
         filename_alignment : str, default "center"
             Horizontal alignment of the filename. Can be "left", "right" and "center".
             The default is "center", which will align the content centered horizontally.
+        filename_path : bool, default False
+            Whether to show the full path of the filename or just the filename. Default is False, which will only show the filename.
         fill_by : str, default "row"
             If slide_layout is grid or custom, choose to fill the grid row-by-row or column-by-column. 'fill_by' can be "row" or "column".
         remove_placeholders : str, default False
             Whether to remove empty placeholders from the slide, e.g. if title is not given. Default is False; to keep all placeholders. If True, empty placeholders will be removed.
+        fontsize : float, default None
+            Fontsize of text content. If None, the fontsize is automatically determined to fit the text in the textbox.
         pdf_pages : int or "all" default "all"
             Pages to be included from a multipage pdf. e.g. 1 (will include page 1), [1,3] will include pages 1 and 3. "all" includes all available pages.
         """
 
-        # Get input parameters
+        # Get input parameters; all function defaults are None to distinguish between given arguments and global defaults
         parameters = locals()
         parameters = {k: v for k, v in parameters.items() if v is not None}
         parameters.pop("self")
-        parameters = self._check_add_slide_input(parameters)
+        self.add_to_config(parameters)
         self.logger.debug(f"Input parameters: {parameters}")
+
+        # Validate parameters and expand outer_margin
+        self._validate_parameters(parameters)  # changes parameters in place
 
         # If input was None, replace with default parameters from upper presentation
         fill_dict(parameters, self._default_slide_parameters)
-        self.add_to_config(parameters)
         self.logger.debug("Final slide parameters: {}".format(parameters))
-
-        # Check validity and format parameters before creating slides
-        parameters = Slide.format_parameters(parameters)
 
         # Add slides dependent on content type
         if "grouped_content" in parameters:
@@ -436,22 +499,6 @@ class PowerPointReport():
         for tmp_file in tmp_files:
             os.remove(tmp_file)
 
-    def _check_add_slide_input(self, parameters):
-        """ Check the format of the input parameters for the slide and return an updated dictionary. """
-
-        # Establish if content or grouped_content was given
-        if "content" in parameters and "grouped_content" in parameters:
-            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
-
-        # Check format of content
-        # if "content" in parameters:
-
-        # If split is given, content should be given
-        if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
-            raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
-
-        return parameters
-
     def _setup_slide(self, parameters):
         """ Initialize an empty slide with a given layout. """
 
@@ -459,24 +506,9 @@ class PowerPointReport():
         n_slides = len(self._slides)
         self.logger.info("Adding slide {}".format(n_slides + 1))
 
-        # Get layout object from presentation
-        slide_layout = parameters.get("slide_layout", 0)
-        if isinstance(slide_layout, int):
-            try:
-                layout_obj = self._prs.slide_layouts[slide_layout]
-            except IndexError:
-                n_layouts = len(self._prs.slide_layouts)
-                raise IndexError(f"Layout index {slide_layout} not found in slide master. The number of slide layouts is {n_layouts} (the maximum index is {n_layouts-1})")
-
-        elif isinstance(slide_layout, str):
-            try:
-                layout_obj = self._prs.slide_layouts.get_by_name(slide_layout)
-            except KeyError:
-                raise KeyError(f"Layout named '{slide_layout}' not found in slide master.")
-        else:
-            raise TypeError("Layout should be an integer or a string.")
-
         # Add slide to python-pptx presentation
+        slide_layout = parameters.get("slide_layout", 0)
+        layout_obj = self._get_slide_layout(slide_layout)
         slide_obj = self._prs.slides.add_slide(layout_obj)
 
         # Add slide to list of slides in internal object
@@ -491,6 +523,27 @@ class PowerPointReport():
         self._slides.append(slide)
 
         return slide
+
+    def _get_slide_layout(self, slide_layout):
+        """ Get the slide layout object from a given layout. """
+
+        if isinstance(slide_layout, int):
+            try:
+                layout_obj = self._prs.slide_layouts[slide_layout]
+            except IndexError:
+                n_layouts = len(self._prs.slide_layouts)
+                raise IndexError(f"Layout index {slide_layout} not found in slide master. The number of slide layouts is {n_layouts} (the maximum index is {n_layouts-1})")
+
+        elif isinstance(slide_layout, str):
+
+            layout_obj = self._prs.slide_layouts.get_by_name(slide_layout)
+            if layout_obj is None:
+                raise KeyError(f"Layout named '{slide_layout}' not found in slide master.")
+
+        else:
+            raise TypeError("Layout should be an integer or a string.")
+
+        return layout_obj
 
     def convert_pdf(self, pdf, pdf_pages, max_allowed=None):
         """ Convert a pdf file to a png file(s).
@@ -563,18 +616,25 @@ class PowerPointReport():
         # Expand content files
         content = glob_files(content)
 
-        # Replace multipage pdfs
-        tmp_files = []
-        for idx, element in enumerate(content):
-            if element.endswith(".pdf"):
-                if parameters.get("show_filename"):
-                    raise ValueError("show_filename is True, but pdfs are converted via temporary files, will result in wrong titles.")
-                content[idx] = self.convert_pdf(element, parameters.get("pdf_pages", "all"))
-                tmp_files += content[idx]  # tmp_fles must be removed later
-                self.logger.debug(f"Replaced: {element} with {content[idx]}.")
-            else:
-                content[idx] = [content[idx]]
-        content = sum(content, [])
+        # Replace multipage pdfs if present
+        tmp_files = []  # collect files for cleaning up later
+        tmp_content = []  # don't alter original list
+        for element in content:
+            if isinstance(element, str):  # avoid None or list type
+                if element.endswith(".pdf"):  # only replace pdfs
+                    # show filename will show tmp files
+                    if parameters.get("show_filename"):
+                        raise ValueError("show_filename is True, but pdfs are converted via temporary files, will result in wrong titles.")
+
+                    img_files = self.convert_pdf(element, parameters.get("pdf_pages", "all"))
+                    tmp_content += img_files
+                    tmp_files += img_files  # tmp_fles must be removed later
+                    self.logger.debug(f"Replaced: {element} with {img_files}.")
+                    continue
+
+            tmp_content.append(element)
+
+        content = tmp_content
 
         # If split is false, content should be contained in one slide
         if parameters["split"] is False:
@@ -824,37 +884,48 @@ class PowerPointReport():
 
         self._prs.save(filename)
 
+        # Save presentation as pdf
+        if pdf:
+            self._save_pdf(filename)
+
         # Remove borders again
         if show_borders is True:
             self.remove_borders()  # Remove borders again
 
+    # not included in tests due to libreoffice dependency
+    def _save_pdf(self, filename):  # pragma: no cover
+        """
+        Save presentation as pdf.
+
+        Parameters
+        ----------
+        filename : str
+            Filename of the presentation in pptx format. The pdf will be saved with the same basename.
+        """
+        self.logger.info("Additionally saving presentation as .pdf")
+
+        # Check if libreoffice is installed
+        is_installed = False
+        try:
+            self.logger.debug("Checking if libreoffice is installed...")
+            result = subprocess.run(["libreoffice", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.logger.debug("Version of libreoffice: " + result.stdout.rstrip())
+            is_installed = True
+
+        except FileNotFoundError:
+            self.logger.error("Option 'pdf' is set to True, but LibreOffice could not be found on path. Please install LibreOffice to save presentations as pdf.")
+
         # Save presentation as pdf
-        if pdf:
+        if is_installed:
 
-            self.logger.info("Additionally saving presentation as .pdf")
+            outdir = os.path.dirname(filename)
+            outdir = "." if outdir == "" else outdir  # outdir cannot be empty
 
-            # Check if libreoffice is installed
-            is_installed = False
-            try:
-                self.logger.debug("Checking if libreoffice is installed...")
-                result = subprocess.run(["libreoffice", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                self.logger.debug("Version of libreoffice: " + result.stdout.rstrip())
-                is_installed = True
+            cmd = f"libreoffice --headless --invisible --convert-to pdf --outdir {outdir} {filename}"
+            self.logger.debug("Running command: " + cmd)
 
-            except FileNotFoundError:
-                self.logger.error("Option 'pdf' is set to True, but LibreOffice could not be found on path. Please install LibreOffice to save presentations as pdf.")
-
-            # Save presentation as pdf
-            if is_installed:
-
-                outdir = os.path.dirname(filename)
-                outdir = "." if outdir == "" else outdir  # outdir cannot be empty
-
-                cmd = f"libreoffice --headless --invisible --convert-to pdf --outdir {outdir} {filename}"
-                self.logger.debug("Running command: " + cmd)
-
-                process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                while process.poll() is None:
-                    line = process.stdout.readline().rstrip()
-                    if line != "":
-                        self.logger.debug("Command output: " + line)
+            process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            while process.poll() is None:
+                line = process.stdout.readline().rstrip()
+                if line != "":
+                    self.logger.debug("Command output: " + line)
