@@ -141,6 +141,7 @@ class Box():
 
         # Find out what type of content it is
         content_type = self._get_content_type(content)
+        self.content_type = content_type
 
         if content_type == "pdf":
             filename = self.convert_pdf(content)

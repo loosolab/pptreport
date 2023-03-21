@@ -22,7 +22,7 @@
             {"content": ["content/*.jpg"], "title": "A grid of animals", "n_columns": 3},
             {"content": ["content/*.jpg"], "title": "A grid (no inner margins)", "inner_margin": 0, "n_columns": 3},
             {"content": ["content/*.jpg"], "title": "A grid (no outer margins)", "outer_margin": 0, "n_columns": 3},
-            {"content": ["content/zebra_fish.png"], "title": "Custom margins", "left_margin": 0, "bottom_margin": 0},
+            {"content": ["content/zebra_fish.png"], "title": "Custom margins", "left_margin": 0, "right_margin": 4},
             {"content": ["content/*_fish*", "content/fish_description.txt"], "title": "Fish with text from file"},
             {"content": ["content/*_fish*", "content/fish_description.md"], "title": "Fish with text from markdown"},
             {"content": ["content/*_fish*"], "title": "Fish with slide notes", "notes": "content/fish_description.txt"},
