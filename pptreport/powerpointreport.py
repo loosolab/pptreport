@@ -292,33 +292,6 @@ class PowerPointReport():
         self._prs.slide_height = h
         self._prs.slide_width = w
 
-    def format_parameters(self, parameters):
-        """ Checks and formats specific slide parameters to the correct type. """
-
-        parameters = parameters.copy()  # Make a copy to not change the original dict
-
-        # Format "n_columns" to int
-        if "n_columns" in parameters:
-            try:
-                parameters["n_columns"] = int(parameters["n_columns"])
-            except ValueError:
-                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
-
-        # Format boolean parameters to bool
-        bool_parameters = [key for key, value in self._default_slide_parameters.items() if isinstance(value, bool)]
-        for param in bool_parameters:
-            if param in parameters:
-                value = parameters[param]
-                if isinstance(value, str):
-                    if value.lower() in ["true", "1", "t", "y", "yes"]:
-                        parameters[param] = True
-                    elif value.lower() in ["false", "0", "f", "n", "no"]:
-                        parameters[param] = False
-                    else:
-                        raise ValueError(f"Could not convert '{param}' parameter to bool. The given value is: '{value}'. Please use 'True' or 'False'.")
-
-        return parameters
-
     # ------------------------------------------------------ #
     # ------------- Functions for adding slides ------------ #
     # ------------------------------------------------------ #
@@ -345,6 +318,26 @@ class PowerPointReport():
                 parameters["bottom_margin"] = v
             else:
                 parameters[k] = v  # overwrite previously set top/bottom/left/right margins if they are explicitly given
+
+        # Format "n_columns" to int
+        if "n_columns" in parameters:
+            try:
+                parameters["n_columns"] = int(parameters["n_columns"])
+            except ValueError:
+                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
+
+        # Format boolean parameters to bool
+        bool_parameters = [key for key, value in self._default_slide_parameters.items() if isinstance(value, bool)]
+        for param in bool_parameters:
+            if param in parameters:
+                value = parameters[param]
+                if isinstance(value, str):
+                    if value.lower() in ["true", "1", "t", "y", "yes"]:
+                        parameters[param] = True
+                    elif value.lower() in ["false", "0", "f", "n", "no"]:
+                        parameters[param] = False
+                    else:
+                        raise ValueError(f"Could not convert '{param}' parameter to bool. The given value is: '{value}'. Please use 'True' or 'False'.")
 
     def add_title_slide(self, title, layout=0, subtitle=None):
         """

@@ -67,6 +67,6 @@ def test_show_filename(show_filename):
     n_placeholders = len(slide._slide.placeholders)
     if slide.show_filename:
         assert len(slide._slide.shapes) - n_placeholders == 2
-        assert slide._slide.shapes[-1].text == content_dir + "cat.jpg"
+        assert slide._slide.shapes[-1].text == "cat.jpg"
     else:
         assert len(slide._slide.shapes) - n_placeholders == 1
