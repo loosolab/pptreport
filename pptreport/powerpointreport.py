@@ -232,12 +232,25 @@ class PowerPointReport():
             else:
                 self._default_slide_parameters[k] = v
 
+            if k == "outer_margin":
+                self._default_slide_parameters["left_margin"] = v
+                self._default_slide_parameters["right_margin"] = v
+                self._default_slide_parameters["top_margin"] = v
+                self._default_slide_parameters["bottom_margin"] = v
+
         # Add to internal config dict
         self._config_dict["global_parameters"] = parameters
 
     def add_to_config(self, parameters):
-        """ Add the slide parameters to the config file """
+        """ Add the slide parameters to the config file.
 
+        Parameters
+        ----------
+        parameters : dict
+            The parameters for the slide.
+        """
+
+        parameters = parameters.copy()  # ensure that later changes in parameters are not reflected in the config dict
         if "slides" not in self._config_dict:
             self._config_dict["slides"] = []
 
@@ -280,6 +293,29 @@ class PowerPointReport():
     # ------------------------------------------------------ #
     # ------------- Functions for adding slides ------------ #
     # ------------------------------------------------------ #
+
+    def _validate_parameters(self, parameters):
+        """ Check the format of the input parameters for the slide and return an updated dictionary. """
+
+        # Establish if content or grouped_content was given
+        if "content" in parameters and "grouped_content" in parameters:
+            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
+
+        # If split is given, content should be given
+        if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
+            raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
+
+        # Set outer margin -> left/right/top/bottom
+        for k in list(parameters.keys()):
+            v = parameters[k]
+
+            if k == "outer_margin":
+                parameters["left_margin"] = v
+                parameters["right_margin"] = v
+                parameters["top_margin"] = v
+                parameters["bottom_margin"] = v
+            else:
+                parameters[k] = v  # overwrite previously set top/bottom/left/right margins if they are explicitly given
 
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
@@ -377,16 +413,15 @@ class PowerPointReport():
         parameters = locals()
         parameters = {k: v for k, v in parameters.items() if v is not None}
         parameters.pop("self")
-        parameters = self._check_add_slide_input(parameters)
+        self.add_to_config(parameters)
         self.logger.debug(f"Input parameters: {parameters}")
+
+        # Validate parameters and expand outer_margin
+        self._validate_parameters(parameters)  # changes parameters in place
 
         # If input was None, replace with default parameters from upper presentation
         fill_dict(parameters, self._default_slide_parameters)
-        self.add_to_config(parameters)
         self.logger.debug("Final slide parameters: {}".format(parameters))
-
-        # Check validity and format parameters before creating slides
-        parameters = Slide.format_parameters(parameters)
 
         # Add slides dependent on content type
         if "grouped_content" in parameters:
@@ -411,22 +446,6 @@ class PowerPointReport():
                 slide = self._setup_slide(parameters)
                 slide.content = slide_content
                 slide._fill_slide()  # Fill slide with content
-
-    def _check_add_slide_input(self, parameters):
-        """ Check the format of the input parameters for the slide and return an updated dictionary. """
-
-        # Establish if content or grouped_content was given
-        if "content" in parameters and "grouped_content" in parameters:
-            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
-
-        # Check format of content
-        # if "content" in parameters:
-
-        # If split is given, content should be given
-        if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
-            raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
-
-        return parameters
 
     def _setup_slide(self, parameters):
         """ Initialize an empty slide with a given layout. """
