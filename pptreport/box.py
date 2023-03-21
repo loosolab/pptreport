@@ -1,22 +1,27 @@
 import os
 import tempfile
 import re
+import pkg_resources
 
 from pptx.enum.shapes import MSO_SHAPE
-from pptx.enum.text import MSO_AUTO_SIZE, MSO_ANCHOR, PP_ALIGN
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.dml.color import RGBColor
 from pptx.util import Pt
+from pptx.text.layout import TextFitter
 
 # For reading pictures
 from PIL import Image
 import fitz
 
-# For fonts
-import matplotlib.font_manager
+
+def split_string(string, length):
+    """ Split a string into a list of strings of length 'length' """
+    return [string[i:i + length] for i in range(0, len(string), length)]
 
 
-def resize_text(txt_frame, max_size=18):
-    """ Resize text to fit the textbox.
+def estimate_fontsize(txt_frame, max_size=18):
+    """
+    Resize text to fit the textbox.
 
     Parameters
     ----------
@@ -24,18 +29,54 @@ def resize_text(txt_frame, max_size=18):
         The text frame to be resized.
     max_size : int, default 18
         The maximum fontsize of the text.
+
+    Returns
+    --------
+    size : int
+        The estimated fontsize of the text.
     """
 
-    # Find all fonts and fit text to the box
-    fonts = matplotlib.font_manager.findSystemFonts()
+    # Get the text across all runs
+    text = ""
+    for paragraph in txt_frame.paragraphs:
+        for run in paragraph.runs:
+            text += run.text
 
-    # Find a font that works
-    for font in fonts:
-        try:
-            txt_frame.fit_text(font_file=font, max_size=max_size)  # some fonts return a 'cannot unpack non-iterable NoneType object'-error
-            break
-        except Exception:
-            pass
+    # Get font
+    font = pkg_resources.resource_filename("pptreport", "fonts/OpenSans-Regular.ttf")
+
+    # Calculate best fontsize
+    try:
+        size = TextFitter.best_fit_font_size(text, txt_frame._extents, max_size, font)
+    except TypeError as e:  # happens with long filenames, which cannot fit on one line
+
+        # Try fitting by splitting long words; decrease length if TextFitter still fails
+        max_word_len = 20
+        while True:
+            if max_word_len < 5:
+                raise e
+            try:
+                words = text.split(" ")
+                words = [split_string(word, max_word_len) for word in words]
+                words = sum(words, [])  # flatten list
+                text = " ".join(words)
+
+                size = TextFitter.best_fit_font_size(text, txt_frame._extents, max_size, font)
+                break  # success
+
+            except TypeError:
+                max_word_len = int(max_word_len / 2)  # decrease word length
+
+    return size
+
+
+def format_textframe(txt_frame, size=12, name="Calibri"):
+    """ Set the fontsize of the text in the text frame. """
+
+    for paragraph in txt_frame.paragraphs:
+        for run in paragraph.runs:
+            run.font.size = Pt(size)
+            run.font.name = "Calibri"
 
 
 class Box():
@@ -104,10 +145,6 @@ class Box():
                 try:
                     with open(content) as f:
                         _ = f.read()
-                    # file is readable but ends with md
-                    if content.endswith(".md"):
-                        return "markdown"
-                    # else it's a normal text file
                     return "textfile"
 
                 except UnicodeDecodeError:
@@ -141,6 +178,7 @@ class Box():
 
         # Find out what type of content it is
         content_type = self._get_content_type(content)
+        self.content_type = content_type
 
         if content_type == "pdf":
             filename = self.convert_pdf(content)
@@ -164,23 +202,19 @@ class Box():
                 if horizontal != "center":
                     self.left = self.picture.left
                     self.width = self.picture.width
+
+                if self.filename_path is False:
+                    content = os.path.basename(content)
                 self.fill_text(content, is_filename=True)
 
-        elif content_type == "textfile":
+        elif content_type == "textfile":  # textfile can also contain markdown
             with open(content) as f:
                 text = f.read()
             self.fill_text(text)
 
-        elif content_type == "markdown":
-            with open(content) as f:
-                text = f.read()
-            self.fill_text(text, md=True)
+        elif content_type == "text":  # text can also contain markdown
+            self.fill_text(content)
 
-        elif content_type == "text":
-            if self._contains_md(content):
-                self.fill_text(content, md=True)
-            else:
-                self.fill_text(content)
         elif content_type == "empty":
             return  # do nothing
         else:
@@ -339,7 +373,7 @@ class Box():
                     }
 
         for reg in md_regex.values():
-            if re.match(reg, text):
+            if re.search(reg, text):
                 return True
 
         return False
@@ -367,91 +401,85 @@ class Box():
 
         Parameters
         ----------
-        p:<pptx.text.text._Paragraph>
+        p : <pptx.text.text._Paragraph>
             paragraph to add to
         text : str
             The text to be added to the box.
         """
         # mistune is only needed for md, only import if needed
-        try:
-            import mistune
-        except ModuleNotFoundError:
-            raise ImportError("mistune not install. Please install via `pip3 install mistune`")
+        import mistune
 
         # render input as html.ast
         markdown = mistune.create_markdown(renderer="ast")
 
         # traverse the tree
-        for par in markdown(text):
-            if par["type"] == "paragraph":
-                if p.text != "":
-                    run = p.add_run()
-                    run.text = "\n"
-                for child in par["children"]:  # children are the single md elements like bold, italic,...
-                    # italic
-                    if child["type"] == "emphasis":
+        for string in text.split("\n"):
+            for i, par in enumerate(markdown(string)):
+                if par["type"] == "paragraph":
+
+                    # Add newlines between paragraphs
+                    if i > 0:
                         run = p.add_run()
-                        run.font.bold = False
-                        run.font.italic = True
-                        run.text = self._get_text_all_children(child)
-                    # bold
-                    elif child["type"] == "strong":
-                        run = p.add_run()
-                        run.text = self._get_text_all_children(child)
-                        run.font.bold = True
-                        run.font.italic = False
-                    # link
-                    elif child["type"] == "link":
-                        run = p.add_run()
-                        run.text = self._get_text_all_children(child)
-                        hlink = run.hyperlink
-                        hlink.address = child["link"]
-                        run.font.bold = False
-                        run.font.italic = False
-                    # alternative text for images
-                    elif child["type"] == "image":
-                        try:
-                            print("markdown images not supported. Trying alternative text.")
-                            text = child["alt"]
+                        run.text = "\n"
+
+                    for child in par["children"]:  # children are the single md elements like bold, italic,...
+                        # italic
+                        if child["type"] == "emphasis":
+                            run = p.add_run()
+                            run.font.italic = True
+                            run.text = self._get_text_all_children(child)
+                        # bold
+                        elif child["type"] == "strong":
+                            run = p.add_run()
+                            run.text = self._get_text_all_children(child)
+                            run.font.bold = True
+                        # link
+                        elif child["type"] == "link":
+                            run = p.add_run()
+                            run.text = self._get_text_all_children(child)
+                            hlink = run.hyperlink
+                            hlink.address = child["link"]
+                        # alternative text for images
+                        elif child["type"] == "image":
+                            try:
+                                print("markdown images not supported. Trying alternative text.")
+                                text = child["alt"]
+                                run = p.add_run()
+                                run.text = text
+                            except KeyError:
+                                print("No alternative text given. Skipping entry.")
+                        # codespan
+                        # elif child["type"]=="codespan":
+                        # plain text & default case
+                        else:
+                            try:
+                                text = child["text"]
+                            except KeyError:
+                                print("Unknown child type. Trying to append children's content as plain text.")
+                                try:
+                                    text = self._get_text_all_children(child)
+                                except KeyError:
+                                    print(f"Child type {child['type']} is not supported.")
+                                    continue  # continue with next child
                             run = p.add_run()
                             run.text = text
-                            run.font.bold = False
-                            run.font.italic = False
-                        except KeyError:
-                            print("No alternative text given. Skipping entry.")
-                    # codespan
-                    # elif child["type"]=="codespan":
-                    # plain text & default case
-                    else:
-                        try:
-                            text = child["text"]
-                        except KeyError:
-                            print("Unknown child type. Trying to append children's content as plain text.")
-                            try:
-                                text = self._get_text_all_children(child)
-                            except KeyError:
-                                print(f"Child type {child['type']} is not supported.")
-                                continue  # continue with next child
-                        run = p.add_run()
-                        run.text = text
-                        run.font.bold = False
-                        run.font.italic = False
 
-            elif par["type"] == "heading":
-                # implement heading (bold, bigger) ? Or add it only as plain txt
-                pass
-            elif par["type"] == "list":
-                print(par)
-                # implement list
-                pass
-            else:
-                # will be handled in paragraph > codespan/link/block_code (they have duplicate entries in the tree)
-                pass
+                elif par["type"] == "newline":
+                    run = p.add_run()
+                    run.text = "\n\n"  # newline for previous line + newline for new paragraph
 
-        # resize_text(txt_frame)
-        # txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE  # An additional step of resizing text to fit the box
+                elif par["type"] == "heading":
+                    # implement heading (bold, bigger) ? Or add it only as plain txt
+                    pass
 
-    def fill_text(self, text, is_filename=False, md=False):
+                elif par["type"] == "list":
+                    # implement list
+                    pass
+                else:
+                    # will be handled in paragraph > codespan/link/block_code (they have duplicate entries in the tree)
+                    pass
+
+    def fill_text(self, text, is_filename=False):
         """
         Fill the box with text.
 
@@ -461,26 +489,28 @@ class Box():
             The text to be added to the box.
         is_filename: bool, optional
             True if text contains a filename to be placed above image, False otherwise. Default: False
-        md: bool, optional
-            True if text contains markdown, False otherwise. Default: False
         """
 
         txt_box = self.slide.shapes.add_textbox(self.left, self.top, self.width, self.height)
         txt_frame = txt_box.text_frame
         txt_frame.word_wrap = True
 
+        # Check if text contains markdown
+        md = self._contains_md(text)
+
         # Place all text in one paragraph
-        # txt_frame.add_paragraph() # text_frame already has one paragraph
         p = txt_frame.paragraphs[0]
         if md:
             self._fill_md(p=p, text=text)
-
         else:
             p.text = text
 
-            # Try to fit text size to the box
-            resize_text(txt_frame)
-            txt_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE  # An additional step of resizing text to fit the box
+        # Try to fit text size to the box
+        if self.fontsize is None:
+            size = estimate_fontsize(txt_frame)
+        else:
+            size = self.fontsize
+        format_textframe(txt_frame, size=size)
 
         # Set alignment of text in textbox
         if is_filename:
