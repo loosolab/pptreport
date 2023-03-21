@@ -2,6 +2,8 @@ import numpy as np
 import os
 from pptx.util import Cm
 from pptreport.box import Box
+import warnings
+from numpy import VisibleDeprecationWarning
 
 
 class Slide():
@@ -41,35 +43,53 @@ class Slide():
         n_columns = self.n_columns
 
         # Get layout matrix depending on "layout" variable
-        if layout == "grid":
-            n_columns = min(n_columns, n_elements)  # number of columns cannot be larger than number of elements
-            n_rows = int(np.ceil(n_elements / n_columns))  # number of rows to fit elements
-            n_total = n_rows * n_columns
+        if isinstance(layout, str):
+            if layout == "grid":
 
-            intarray = list(range(n_elements))
-            intarray.extend([np.nan] * (n_total - n_elements))
+                n_columns = min(n_columns, n_elements)  # number of columns cannot be larger than number of elements
+                n_rows = int(np.ceil(n_elements / n_columns))  # number of rows to fit elements
+                n_total = n_rows * n_columns
 
-            if self.fill_by == "row":
-                layout_matrix = np.array(intarray).reshape((n_rows, n_columns))
-            elif self.fill_by == "column":
-                layout_matrix = np.array(intarray).reshape((n_columns, n_rows))
-                layout_matrix = layout_matrix.T
+                intarray = list(range(n_elements))
+                intarray.extend([np.nan] * (n_total - n_elements))
+
+                if self.fill_by == "row":
+                    layout_matrix = np.array(intarray).reshape((n_rows, n_columns))
+                elif self.fill_by == "column":
+                    layout_matrix = np.array(intarray).reshape((n_columns, n_rows))
+                    layout_matrix = layout_matrix.T
+                else:
+                    raise ValueError(f"Invalid value for 'fill_by' parameter: '{self.fill_by}'. Please use 'row' or 'column'.")
+
+            elif layout == "vertical":
+                layout_matrix = np.array(list(range(n_elements))).reshape((n_elements, 1))
+
+            elif layout == "horizontal":
+                layout_matrix = np.array(list(range(n_elements))).reshape((1, n_elements))
             else:
-                raise ValueError(f"Invalid value for 'fill_by' parameter: '{self.fill_by}'. Please use 'row' or 'column'.")
+                raise ValueError(f"Unknown layout string: '{layout}'. Please use 'grid', 'vertical' or 'horizontal', or a custom matrix.")
 
-        elif layout == "vertical":
-            layout_matrix = np.array(list(range(n_elements))).reshape((n_elements, 1))
-
-        elif layout == "horizontal":
-            layout_matrix = np.array(list(range(n_elements))).reshape((1, n_elements))
-
-        else:
-            try:
-                layout_matrix = np.array(layout)
-            except ValueError:
-                raise ValueError(f"Could not convert 'layout' parameter to numpy array. The given value is: '{layout}'. Please use a valid layout matrix.")
+        else:  # layout is expected to be a matrix
+            layout_matrix = self._validate_layout(layout)  # check if layout is a valid matrix
 
         self._layout_matrix = layout_matrix
+
+    @staticmethod
+    def _validate_layout(layout_matrix):
+        """ Validate the given layout matrix. """
+        # TODO: check if layout is a valid matrix
+
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("error", category=VisibleDeprecationWarning, message="Creating an ndarray from ragged nested*")
+                layout_matrix = np.array(layout_matrix)
+        except VisibleDeprecationWarning:
+            raise ValueError("The given layout matrix is not valid. Please make sure that all rows have the same length.")
+
+        if len(layout_matrix.shape) == 1:
+            layout_matrix = layout_matrix.reshape((1, len(layout_matrix)))  # convert to 2D array
+
+        return layout_matrix
 
     # -------------------  Fill slide with content  ------------------- #
     def _fill_slide(self):
@@ -80,6 +100,7 @@ class Slide():
 
         # Fill boxes with content
         if len(self.content) > 0:
+            self.logger.debug(f"Filling slide with content: {self.content}")
             self.set_layout_matrix()
             self.create_boxes()       # Create boxes based on layout
             self.fill_boxes()         # Fill boxes with content
@@ -102,23 +123,23 @@ class Slide():
         """ Add notes to the slide. """
 
         if self.notes is not None:
-            if isinstance(self.notes, list):
-                notes_string = ''
-                for s in self.notes:
+
+            # Convert notes to a list to enable looping
+            if not isinstance(self.notes, list):
+                self.notes = [self.notes]
+
+            notes_string = ''
+            for s in self.notes:
+                if isinstance(s, str):
                     if os.path.exists(s):
                         with open(s, 'r') as f:
                             notes_string += f'\n{f.read()}'
                     else:
                         notes_string += f'\n{s}'
-                notes_string = notes_string.lstrip()  # remove leading newline
+                else:
+                    raise ValueError("Notes must be either a string or a list of strings.")
 
-            elif os.path.exists(self.notes):
-                with open(self.notes, "r") as f:
-                    notes_string = f.read()
-
-            else:
-                notes_string = self.notes
-
+            notes_string = notes_string.lstrip()  # remove leading newline
             self._slide.notes_slide.notes_text_frame.text = notes_string
 
     def create_boxes(self):
