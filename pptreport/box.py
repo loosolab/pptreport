@@ -1,5 +1,4 @@
 import os
-import tempfile
 import re
 
 from pptx.enum.shapes import MSO_SHAPE
@@ -9,7 +8,7 @@ from pptx.util import Pt
 
 # For reading pictures
 from PIL import Image
-import fitz
+
 
 # For fonts
 import matplotlib.font_manager
@@ -99,7 +98,6 @@ class Box():
 
         if isinstance(content, str):
             if os.path.isfile(content):
-
                 # Find out the content of the file
                 try:
                     with open(content) as f:
@@ -111,11 +109,7 @@ class Box():
                     return "textfile"
 
                 except UnicodeDecodeError:
-
-                    if content.endswith(".pdf"):
-                        return "pdf"
-                    else:
-                        return "image"
+                    return "image"
             else:
                 return "text"
         elif content is None:
@@ -142,12 +136,7 @@ class Box():
         # Find out what type of content it is
         content_type = self._get_content_type(content)
 
-        if content_type == "pdf":
-            filename = self.convert_pdf(content)
-            self.fill_image(filename)
-            os.remove(filename)
-
-        elif content_type == "image":
+        if content_type == "image":
             full_height = self.height
 
             if self.show_filename:
@@ -187,23 +176,6 @@ class Box():
             pass
 
         self.logger.debug(f"Box index {box_index} was filled with {content_type}")
-
-    def convert_pdf(self, pdf):
-        """ Convert a pdf file to a png file. """
-
-        # Create temporary file
-        temp_name = next(tempfile._get_candidate_names()) + ".png"
-        temp_dir = tempfile.gettempdir()
-        temp_file = os.path.join(temp_dir, temp_name)
-        self.logger.debug(f"Converting pdf to temporary png at: {temp_file}")
-
-        # Convert pdf to png
-        doc = fitz.open(pdf)
-        page = doc.load_page(0)
-        pix = page.get_pixmap()
-        pix.save(temp_file)
-
-        return temp_file
 
     def fill_image(self, filename):
         """ Fill the box with an image. """
