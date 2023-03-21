@@ -87,12 +87,12 @@ class Slide():
         margins = {"outer_margin": self.outer_margin, "inner_margin": self.inner_margin, "left_margin": self.left_margin, "right_margin": self.right_margin,
                    "top_margin": self.top_margin, "bottom_margin": self.bottom_margin}
 
-        for margin, value in margins:
+        for margin, value in margins.items():
             if value is not None:
 
                 # Check whether value is a float
                 try:
-                    margin, value = float(value)
+                    value = float(value)
                     setattr(self, margin, value)
                 except ValueError:
                     raise ValueError(f"Could not convert '{margin}' to a float. The given value is: {value}")
@@ -112,6 +112,9 @@ class Slide():
 
             value = getattr(self, param)
 
+            if value is None:
+                continue
+
             # Convert from string to list
             if isinstance(value, str):
                 try:
@@ -125,7 +128,7 @@ class Slide():
             except Exception:
                 raise ValueError(f"Could not convert '{param}' parameter to list of values. The given value is: '{value}'. Please use a list of values.")
 
-            setattr(self, value)  # Set the new value
+            setattr(self, param, value)  # Set the new value
 
     @staticmethod
     def _validate_layout(layout_matrix):
