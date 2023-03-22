@@ -547,7 +547,8 @@ class PowerPointReport():
 
     def convert_pdf(self, pdf, pdf_pages, max_allowed=None):
         """ Convert a pdf file to a png file(s).
-       Parameters
+
+        Parameters
         ----------
         pdf : str
             pdf file to convert
@@ -571,15 +572,18 @@ class PowerPointReport():
         # span array over all available pages e.g. pages 3 transforms to [1,2,3]
         pages = [i + 1 for i in range(pages)]
 
-        if isinstance(pdf_pages, int):
-            pdf_pages = [pdf_pages]
-
         if pdf_pages is None:
             raise IndexError(f"Index {pdf_pages} no valid Index.")
 
-        if pdf_pages == "all":
-            pdf_pages = pages
+        if isinstance(pdf_pages, str):
+            if pdf_pages.lower() == "all":
+                pdf_pages = pages
+            else:
+                raise ValueError(f"pdf_pages as string is expected to be 'all', but it is set to '{pdf_pages}'. Please set pdf_pages to 'all' or a list of integers.")
         else:
+            if isinstance(pdf_pages, int):
+                pdf_pages = [pdf_pages]
+
             # all index available? will also fail if index not int
             index_mismatch = [page for page in pdf_pages if page not in pages]
             if len(index_mismatch) != 0:
