@@ -308,8 +308,9 @@ class PowerPointReport():
             raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
 
         # Set outer margin -> left/right/top/bottom
+        orig_parameters = parameters.copy()
         for k in list(parameters.keys()):
-            v = parameters[k]
+            v = orig_parameters[k]
 
             if k == "outer_margin":
                 parameters["left_margin"] = v
@@ -363,28 +364,7 @@ class PowerPointReport():
 
     def add_slide(self,
                   content=None,
-                  grouped_content=None,
-                  title=None,
-                  slide_layout=None,
-                  content_layout=None,
-                  content_alignment=None,
-                  outer_margin=None,
-                  inner_margin=None,
-                  left_margin=None,
-                  right_margin=None,
-                  top_margin=None,
-                  bottom_margin=None,
-                  n_columns=None,
-                  width_ratios=None,
-                  height_ratios=None,
-                  notes=None,
-                  split=None,
-                  show_filename=None,
-                  filename_alignment=None,
-                  filename_path=None,
-                  fill_by=None,
-                  remove_placeholders=None,
-                  fontsize=None,
+                  **kwargs   # arguments given as a dictionary; ensures control over the order of the arguments
                   ):
         """
         Add a slide to the presentation.
@@ -437,10 +417,13 @@ class PowerPointReport():
             Fontsize of text content. If None, the fontsize is automatically determined to fit the text in the textbox.
         """
 
-        # Get input parameters; all function defaults are None to distinguish between given arguments and global defaults
-        parameters = locals()
+        self.logger.debug("Started adding slide")
+
+        # Get input parameters;
+        parameters = {}
+        parameters["content"] = content
+        parameters.update(kwargs)
         parameters = {k: v for k, v in parameters.items() if v is not None}
-        parameters.pop("self")
         self.add_to_config(parameters)
         self.logger.debug(f"Input parameters: {parameters}")
 
@@ -474,6 +457,9 @@ class PowerPointReport():
                 slide = self._setup_slide(parameters)
                 slide.content = slide_content
                 slide._fill_slide()  # Fill slide with content
+
+        self.logger.debug("Finished adding slide")
+        self.logger.debug("-" * 60)  # separator between slide logging
 
     def _setup_slide(self, parameters):
         """ Initialize an empty slide with a given layout. """
@@ -526,7 +512,7 @@ class PowerPointReport():
 
         # Establish content
         content = parameters.get("content", [])
-        if isinstance(content, str):
+        if isinstance(content, str) or content is None:
             content = [content]
 
         # Expand content files
