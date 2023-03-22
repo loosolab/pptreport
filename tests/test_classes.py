@@ -247,6 +247,12 @@ def test_max_pdf_pages_error(pdf_pages, max_allowed):
 
 @pytest.mark.parametrize("pdf_pages", [None, "h", -1, 0, 4])
 def test_index_pdf_pages_error(pdf_pages):
-    with pytest.raises(IndexError):
-        report = PowerPointReport()
-        report.convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
+
+    report = PowerPointReport()
+
+    if isinstance(pdf_pages, str):
+        with pytest.raises(ValueError):
+            report.convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
+    else:
+        with pytest.raises(IndexError):
+            report.convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
