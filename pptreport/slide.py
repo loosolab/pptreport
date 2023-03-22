@@ -1,6 +1,6 @@
 import numpy as np
 import os
-from pptx.util import Cm
+from pptx.util import Emu, Cm
 from pptreport.box import Box
 import warnings
 from numpy import VisibleDeprecationWarning
@@ -218,26 +218,43 @@ class Slide():
         right_margin = self.outer_margin if self.right_margin is None else self.right_margin
         top_margin = self.outer_margin if self.top_margin is None else self.top_margin
         bottom_margin = self.outer_margin if self.bottom_margin is None else self.bottom_margin
+        inner_margin = self.inner_margin
 
         # Convert margins from cm to pptx units
         left_margin_unit = Cm(left_margin)
         right_margin_unit = Cm(right_margin)
         top_margin_unit = Cm(top_margin)
         bottom_margin_unit = Cm(bottom_margin)
-        inner_margin_unit = Cm(self.inner_margin)
+        inner_margin_unit = Cm(inner_margin)
 
         # Add to top margin based on size of title
         if self._slide.shapes.title.text != "":
-            top_margin_unit = self._slide.shapes.title.top + self._slide.shapes.title.height + top_margin_unit
+            title_margin_unit = Emu(self._slide.shapes.title.top + self._slide.shapes.title.height)
+        else:
+            title_margin_unit = Emu(0)
 
         # How many columns and rows are there?
         n_rows, n_cols = layout_matrix.shape
 
         # Get total height and width of pictures
-        total_width = self._slide_width - left_margin_unit - right_margin_unit - (n_cols - 1) * inner_margin_unit
-        total_height = self._slide_height - top_margin_unit - bottom_margin_unit - (n_rows - 1) * inner_margin_unit
+        margin_width = Emu(left_margin_unit + right_margin_unit + (n_cols - 1) * inner_margin_unit)
+        margin_height = Emu(top_margin_unit + bottom_margin_unit + (n_rows - 1) * inner_margin_unit + title_margin_unit)
+        total_width = self._slide_width - margin_width     # available width for content
+        total_height = self._slide_height - margin_height  # available height for content
 
         # Check if total_width < 0
+        if total_width < 0:
+            raise ValueError(f"The width of content is negative. The slide width is {self._slide_width.cm:.1f}cm, but the total width of left, right and inner margins is {margin_width.cm}cm. "
+                             f"Please adjust the margins to make room for content. Given margins are: "
+                             f"left margin={left_margin}cm, right margin={right_margin}cm, inner margin={inner_margin}cm")
+
+        # Check if total_height < 0
+        if total_height < 0:
+            available_height = self._slide_height.cm - title_margin_unit.cm
+            raise ValueError(f"The height of content is negative. The available content height is {available_height:.1f}cm (slide height {self._slide_height.cm:.1f}cm - title height {title_margin_unit.cm:.1f}cm), "
+                             f"but the total height of top, bottom and inner margins is {margin_height.cm:.1f}cm. "
+                             f"Please adjust the margins to make room for content. Given margins are: "
+                             f"top margin={top_margin}cm, bottom margin={bottom_margin}cm, inner margin={inner_margin}cm")
 
         # Get column widths and row heights
         self._validate_ratios()
@@ -263,7 +280,7 @@ class Slide():
             # Get upper left corner of box
             row, col = coordinates[0]
             left = left_margin_unit + np.sum(widths[:col]) + col * inner_margin_unit
-            top = top_margin_unit + np.sum(heights[:row]) + row * inner_margin_unit
+            top = top_margin_unit + np.sum(heights[:row]) + row * inner_margin_unit + title_margin_unit
 
             # Get total width and height of box (can span multiple columns and rows)
             width = 0
