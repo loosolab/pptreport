@@ -38,8 +38,13 @@ def main():
 
     # Create report using PowerPointReport class
     report = PowerPointReport(verbosity=args.verbosity)
-    report.from_config(config_dict)
-    report.save(args.output, show_borders=args.show_borders, pdf=args.pdf)
+    try:
+        report.from_config(config_dict)
+        report.save(args.output, show_borders=args.show_borders, pdf=args.pdf)
+
+    except Exception as e:
+        report.logger.error(e)  # show exception
+        sys.exit(1)
 
     report.logger.info("pptreport finished!")
 
