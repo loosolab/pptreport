@@ -19,7 +19,7 @@ def split_string(string, length):
     return [string[i:i + length] for i in range(0, len(string), length)]
 
 
-def estimate_fontsize(txt_frame, max_size=18):
+def estimate_fontsize(txt_frame, min_size=6, max_size=18):
     """
     Resize text to fit the textbox.
 
@@ -27,6 +27,8 @@ def estimate_fontsize(txt_frame, max_size=18):
     ----------
     txt_frame : pptx.text.text.TextFrame
         The text frame to be resized.
+    min_size : int, default 6
+        The minimum fontsize of the text.
     max_size : int, default 18
         The maximum fontsize of the text.
 
@@ -48,6 +50,7 @@ def estimate_fontsize(txt_frame, max_size=18):
     # Calculate best fontsize
     try:
         size = TextFitter.best_fit_font_size(text, txt_frame._extents, max_size, font)
+
     except TypeError as e:  # happens with long filenames, which cannot fit on one line
 
         # Try fitting by splitting long words; decrease length if TextFitter still fails
@@ -66,6 +69,14 @@ def estimate_fontsize(txt_frame, max_size=18):
 
             except TypeError:
                 max_word_len = int(max_word_len / 2)  # decrease word length
+
+    # the output of textfitter is None if the text does not fit; set text to smallest size
+    if size is None:
+        size = min_size
+
+    # Make sure size is within bounds
+    size = max(min_size, size)
+    size = min(max_size, size)
 
     return size
 
@@ -507,7 +518,9 @@ class Box():
 
         # Try to fit text size to the box
         if self.fontsize is None:
+            self.logger.debug("Estimating fontsize...")
             size = estimate_fontsize(txt_frame)
+            self.logger.debug(f"Found: {size}")
         else:
             size = self.fontsize
         format_textframe(txt_frame, size=size)
