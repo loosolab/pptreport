@@ -257,6 +257,7 @@ def test_index_pdf_pages_error(pdf_pages):
         with pytest.raises(IndexError):
             report.convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
 
+
 @pytest.mark.parametrize("missing_file", ["raise", "empty", "skip", "invalid"])
 def test_missing_file(caplog, missing_file):
     """ Test that a missing file raises an error or just warning """
