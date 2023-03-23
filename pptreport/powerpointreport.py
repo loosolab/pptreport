@@ -310,6 +310,11 @@ class PowerPointReport():
         if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
             raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
 
+        # If grouped_content is given, it should be a list
+        if "grouped_content" in parameters:
+            if not isinstance(parameters["grouped_content"], list):
+                raise TypeError("Invalid input. 'grouped_content' must be a list.")
+
         # Set outer margin -> left/right/top/bottom
         for k in list(parameters.keys()):
             v = parameters[k]

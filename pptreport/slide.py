@@ -215,7 +215,10 @@ class Slide():
 
             #  Create box
             box = self.add_box((left, top, width, height))
-            box._filename = self._filenames[i]  # original filename for the content
+
+            # Add original filename for the content
+            if i < len(self._filenames):  # if i == 2, and number of filenames is 2, index 2 is out of range. Happens if there are empty boxes
+                box._filename = self._filenames[i]
 
     def add_box(self, coordinates):
         """

@@ -226,24 +226,21 @@ def test_get_config(expand):
     else:
         assert isinstance(config["slides"][0]["content"], str)  # not expanded
 
-
-@pytest.mark.parametrize("pdf_pages", ["all", 2, [1, 3], [2, 3, 3]])
-@pytest.mark.parametrize("max_allowed", [None, 3])
-def test_max_pdf_pages_pass(pdf_pages, max_allowed):
+@pytest.mark.parametrize("pdf_pages", ["all", [1, 2]])
+def test_pdf_pages_grouped_error(pdf_pages):
 
     report = PowerPointReport()
-    tmp_files = report.convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages, max_allowed)
+
+    with pytest.raises(ValueError):
+        report.add_slide(grouped_content=[content_dir + "pdfs/multidogs_([0-9]).pdf"], pdf_pages=pdf_pages)
+
+@pytest.mark.parametrize("pdf_pages", ["all", 2, [1, 3], [2, 3, 3]])
+def test_pdf_pages_pass(pdf_pages):
+
+    report = PowerPointReport()
+    tmp_files = report.convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
     for tmp_file in tmp_files:
         os.remove(tmp_file)
-
-
-@pytest.mark.parametrize("pdf_pages", ["all", [1, 3], [2, 3, 3]])
-@pytest.mark.parametrize("max_allowed", [1])
-def test_max_pdf_pages_error(pdf_pages, max_allowed):
-    with pytest.raises(ValueError):
-        report = PowerPointReport()
-        report.convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages, max_allowed)
-
 
 @pytest.mark.parametrize("pdf_pages", [None, "h", -1, 0, 4])
 def test_index_pdf_pages_error(pdf_pages):
