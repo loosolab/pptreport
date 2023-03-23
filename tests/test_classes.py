@@ -225,3 +225,34 @@ def test_get_config(expand):
         assert len(config["slides"][0]["content"]) == 3
     else:
         assert isinstance(config["slides"][0]["content"], str)  # not expanded
+
+
+@pytest.mark.parametrize("pdf_pages", ["all", [1, 2]])
+def test_pdf_pages_grouped_error(pdf_pages):
+
+    report = PowerPointReport()
+
+    with pytest.raises(ValueError):
+        report.add_slide(grouped_content=[content_dir + "pdfs/multidogs_([0-9]).pdf"], pdf_pages=pdf_pages)
+
+
+@pytest.mark.parametrize("pdf_pages", ["all", 2, [1, 3], [2, 3, 3]])
+def test_pdf_pages_pass(pdf_pages):
+
+    report = PowerPointReport()
+    tmp_files = report.convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
+    for tmp_file in tmp_files:
+        os.remove(tmp_file)
+
+
+@pytest.mark.parametrize("pdf_pages", [None, "h", -1, 0, 4])
+def test_index_pdf_pages_error(pdf_pages):
+
+    report = PowerPointReport()
+
+    if isinstance(pdf_pages, str):
+        with pytest.raises(ValueError):
+            report.convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
+    else:
+        with pytest.raises(IndexError):
+            report.convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
