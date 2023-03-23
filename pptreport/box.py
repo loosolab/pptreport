@@ -191,9 +191,11 @@ class Box():
                     self.left = self.picture.left
                     self.width = self.picture.width
 
+                # Determine filename
+                filename = self._filename
                 if self.filename_path is False:
-                    content = os.path.basename(content)
-                self.fill_text(content, is_filename=True)
+                    filename = os.path.basename(filename)
+                self.fill_text(filename, is_filename=True)
 
         elif content_type == "textfile":  # textfile can also contain markdown
             with open(content) as f:

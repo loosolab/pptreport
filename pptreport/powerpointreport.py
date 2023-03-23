@@ -439,7 +439,7 @@ class PowerPointReport():
             Whether to remove empty placeholders from the slide, e.g. if title is not given. Default is False; to keep all placeholders. If True, empty placeholders will be removed.
         fontsize : float, default None
             Fontsize of text content. If None, the fontsize is automatically determined to fit the text in the textbox.
-        pdf_pages : int or "all" default "all"
+        pdf_pages : int, list of int or "all", default "all"
             Pages to be included from a multipage pdf. e.g. 1 (will include page 1), [1,3] will include pages 1 and 3. "all" includes all available pages.
         """
 
@@ -466,36 +466,40 @@ class PowerPointReport():
             # Create one slide per group
             for group, content in content_per_group.items():
 
-                # handle pdf
+                # Save original filenames / content
+                filenames = content[:]
+
+                # Convert pdf to png files
                 for idx, element in enumerate(content):
-                    # single files may be missing for groups
-                    if element is None:
-                        continue
-                    # replace pdf file with image
-                    if element.endswith(".pdf"):
-                        if parameters.get("show_filename"):
-                            raise ValueError("show_filename is True, but pdfs are converted via temporary files, will result in wrong titles.")
-                        # only one page is allowed
-                        content[idx] = self.convert_pdf(element, pdf_pages, max_allowed=1)[0]
-                        tmp_files.append(content[idx])
+                    if element is not None:  # single files may be missing for groups
+                        if element.endswith(".pdf"):
+                            img_files = self.convert_pdf(element, parameters["pdf_pages"])
+
+                            if len(img_files) > 1:
+                                raise ValueError(f"Multiple pages in pdf is not supported for grouped content. Found {len(img_files)} in {content}, as pdf_pages is set to '{pdf_pages}."
+                                                 "Please adjust pdf_pages to only include one page, e.g. pdf_pages=1.")
+                            content[idx] = img_files[0]
+                            tmp_files.append(content[idx])
 
                 slide = self._setup_slide(parameters)
                 slide.title = f"Group: {group}" if slide.title is None else slide.title
                 slide.content = content
+                slide._filenames = filenames  # original filenames per content element
                 slide._fill_slide()
 
         else:
-            content, tmp_files = self._get_content(parameters)
+            content, filenames, tmp_files = self._get_content(parameters)
 
             # Create slide(s)
-            for slide_content in content:
+            for i, slide_content in enumerate(content):
 
                 # Setup an empty slide
                 slide = self._setup_slide(parameters)
                 slide.content = slide_content
+                slide._filenames = filenames[i]  # original filenames per content element
                 slide._fill_slide()  # Fill slide with content
 
-        # clean tmp files
+        # clean tmp files after adding content to slide(s)
         for tmp_file in tmp_files:
             os.remove(tmp_file)
 
@@ -545,7 +549,7 @@ class PowerPointReport():
 
         return layout_obj
 
-    def convert_pdf(self, pdf, pdf_pages, max_allowed=None):
+    def convert_pdf(self, pdf, pdf_pages, dpi=300):
         """ Convert a pdf file to a png file(s).
 
         Parameters
@@ -555,13 +559,13 @@ class PowerPointReport():
         pdf_pages: str, int
             pages to include if pdf is a multipage pdf.
             e.g. [1,2] gives firt two pages, all gives all pages
-        max_allowed: int, None
-            maximum pages allowed. default: None
+        dpi : int, default 300
+            dpi of the output png file
 
         Returns
         -------
-        tmp_files: [str]
-            list containing all temporary filenames
+        img_files: [str]
+            list containing converted filenames (in the tmp folder)
         """
 
         # open pdf with fitz module from pymupdf
@@ -589,11 +593,7 @@ class PowerPointReport():
             if len(index_mismatch) != 0:
                 raise IndexError(f"Pages {index_mismatch} not available for {pdf}")
 
-        if max_allowed is not None:
-            if len(pdf_pages) > max_allowed:
-                raise ValueError(f"Maximum allowed pages set to {max_allowed}, but {len(pdf_pages)} were given")
-
-        tmp_files = []
+        img_files = []
         for page_num in pdf_pages:
             # Create temporary file
             temp_name = next(tempfile._get_candidate_names()) + ".png"
@@ -603,11 +603,11 @@ class PowerPointReport():
 
             # Convert pdf to png
             page = doc.load_page(page_num - 1)  # page 1 is load() with 0
-            pix = page.get_pixmap()
+            pix = page.get_pixmap(dpi=dpi)
             pix.save(temp_file)
-            tmp_files.append(temp_file)
+            img_files.append(temp_file)
 
-        return tmp_files
+        return img_files
 
     def _get_content(self, parameters):
         """ Get slide content based on input parameters. """
@@ -621,35 +621,38 @@ class PowerPointReport():
         content = glob_files(content)
 
         # Replace multipage pdfs if present
-        tmp_files = []  # collect files for cleaning up later
-        tmp_content = []  # don't alter original list
+        content_converted = []  # don't alter original list
+        filenames = []
+        tmp_files = []
         for element in content:
-            if isinstance(element, str):  # avoid None or list type
-                if element.endswith(".pdf"):  # only replace pdfs
-                    # show filename will show tmp files
-                    if parameters.get("show_filename"):
-                        raise ValueError("show_filename is True, but pdfs are converted via temporary files, will result in wrong titles.")
+            if isinstance(element, str) and element.endswith(".pdf"):  # avoid None or list type and only replace pdfs
+                img_files = self.convert_pdf(element, parameters.get("pdf_pages", "all"))
 
-                    img_files = self.convert_pdf(element, parameters.get("pdf_pages", "all"))
-                    tmp_content += img_files
-                    tmp_files += img_files  # tmp_fles must be removed later
-                    self.logger.debug(f"Replaced: {element} with {img_files}.")
-                    continue
+                content_converted += img_files
+                filenames += [element] * len(img_files)  # replace filename with pdf name for each image
+                tmp_files += img_files
 
-            tmp_content.append(element)
+                self.logger.debug(f"Replaced: {element} with {img_files}.")
 
-        content = tmp_content
+            else:
+                filenames += [element]
+                content_converted += [element]
+
+        content = content_converted
 
         # If split is false, content should be contained in one slide
         if parameters["split"] is False:
             content = [content]
+            filenames = [filenames]
         else:
             if len(content) == 0:
                 raise ValueError("Split is True, but 'content' is empty.")
             else:
                 if isinstance(parameters["split"], int):
                     content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
-        return content, tmp_files
+                    filenames = [filenames[i:i + parameters["split"]] for i in range(0, len(filenames), parameters["split"])]
+
+        return content, filenames, tmp_files
 
     def _get_paired_content(self, raw_content):
         """ Get content per group from a list of regex patterns.
