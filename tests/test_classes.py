@@ -256,3 +256,22 @@ def test_index_pdf_pages_error(pdf_pages):
     else:
         with pytest.raises(IndexError):
             report.convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
+
+@pytest.mark.parametrize("missing_file", ["raise", "empty", "skip", "invalid"])
+def test_missing_file(caplog, missing_file):
+    """ Test that a missing file raises an error or just warning """
+
+    report = PowerPointReport(verbosity=1)
+
+    if missing_file == "raise":
+        with pytest.raises(FileNotFoundError):
+            report.add_slide("examples/content/*.txtt", missing_file=missing_file)  # no files found with this extension
+
+    elif missing_file == "invalid":
+        with pytest.raises(ValueError):
+            report.add_slide("examples/content/*.txtt", missing_file=missing_file)
+
+    else:
+        report.add_slide("examples/content/*.txtt", missing_file=missing_file)
+
+        assert "No files could be found for pattern" in caplog.text

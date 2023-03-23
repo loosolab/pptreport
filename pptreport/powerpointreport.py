@@ -42,43 +42,6 @@ def get_default_args(func):
     return defaults
 
 
-def glob_files(lst):
-    """ Glob files in a list of strings which might contain "*". If no files are found for glob, raise an error. """
-
-    if isinstance(lst, str):
-        lst = [lst]
-
-    content = []  # flattened list of files
-    files = []  # names of files in the list
-    for element in lst:
-        if element is not None and "*" in element:
-            globbed = glob.glob(element)
-            if len(globbed) > 0:
-                for file in globbed:
-                    files.append(file)
-                    content.append(file)
-            else:
-                raise ValueError(f"No files could be found for pattern: '{element}'")
-        else:
-            content.append(element)
-
-    # Get the locations of files in the list
-    file_locations = []
-    for i, string in enumerate(content):
-        if string in files:
-            file_locations.append(i)
-
-    # Sort files using natural sorting
-    file_list = [content[i] for i in file_locations]
-    file_list = natsorted(file_list)
-
-    # Return files to content in the correct order
-    for idx, string in zip(file_locations, file_list):
-        content[idx] = string
-
-    return content
-
-
 def get_files_in_dir(directory):
     """ Get all files in the given directory including the path prefix """
 
@@ -146,7 +109,8 @@ class PowerPointReport():
         "fill_by": "row",
         "remove_placeholders": False,
         "fontsize": None,
-        "pdf_pages": "all"
+        "pdf_pages": "all",
+        "missing_file": "raise"
     }
 
     def __init__(self, template=None, size="standard", verbosity=0):
@@ -169,7 +133,7 @@ class PowerPointReport():
         Parameters
         ----------
         verbosity : int, default 1
-            The verbosity of the logger. 0: ERROR, 1: INFO, 2: DEBUG
+            The verbosity of the logger. 0: ERROR and WARNINGS, 1: INFO, 2: DEBUG
 
         Returns
         -------
@@ -347,6 +311,15 @@ class PowerPointReport():
                     else:
                         raise ValueError(f"Could not convert '{param}' parameter to bool. The given value is: '{value}'. Please use 'True' or 'False'.")
 
+        # Validate missing_file
+        if "missing_file" in parameters:
+            if not isinstance(parameters["missing_file"], str):
+                raise TypeError("Invalid input for 'missing_file' - must be either 'raise', 'empty' or 'skip'")
+            else:
+                parameters["missing_file"] = parameters["missing_file"].lower()
+                if parameters["missing_file"] not in ["raise", "empty", "skip"]:
+                    raise ValueError(f"Invalid input '{parameters['missing_file']}' for 'missing_file'. Must be either 'raise', 'empty' or 'skip'.")
+
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
         Add a title slide to the presentation.
@@ -393,7 +366,8 @@ class PowerPointReport():
                   fill_by=None,
                   remove_placeholders=None,
                   fontsize=None,
-                  pdf_pages=None
+                  pdf_pages=None,
+                  missing_file=None
                   ):
         """
         Add a slide to the presentation.
@@ -446,6 +420,11 @@ class PowerPointReport():
             Fontsize of text content. If None, the fontsize is automatically determined to fit the text in the textbox.
         pdf_pages : int, list of int or "all", default "all"
             Pages to be included from a multipage pdf. e.g. 1 (will include page 1), [1,3] will include pages 1 and 3. "all" includes all available pages.
+        missing_file : str, default "raise"
+            What to do if no files were found from a content pattern, e.g. "figure*.txt". Can be either "raise", "empty" or "skip".
+            - If "raise", a FileNotFoundError will be raised.
+            - If "empty", an empty content box will be added for the content pattern and 'add_slide' will continue without error.
+            - If "skip", this content pattern will be skipped (no box added).
         """
 
         # Get input parameters; all function defaults are None to distinguish between given arguments and global defaults
@@ -614,16 +593,71 @@ class PowerPointReport():
 
         return img_files
 
+    def _glob_files(self, lst, missing_file="exit"):
+        """ Expand list of files by globbing.
+
+        Parameters
+        ----------
+        lst : [str]
+            list of strings which might contain "*".
+        missing_file : str, default "exit"
+            What to do if no files are found for a glob pattern. If "exit", raise an error. If "warn", print a warning and continue.
+        """
+
+        if isinstance(lst, str):
+            lst = [lst]
+
+        content = []  # flattened list of files
+        files = []    # names of files in the list
+        for element in lst:
+            if element is not None and "*" in element:
+                globbed = glob.glob(element)
+                if len(globbed) > 0:
+                    for file in globbed:
+                        files.append(file)
+                        content.append(file)
+                else:
+
+                    if missing_file == "raise":
+                        raise FileNotFoundError(f"No files could be found for pattern: '{element}'. Adjust pattern or set missing_file='warn' to ignore the missing file.")
+                    elif missing_file == "empty":
+                        self.logger.warning(f"No files could be found for pattern: '{element}'. Adding empty box.")
+                        content.append(None)
+                    elif missing_file == "skip":
+                        self.logger.warning(f"No files could be found for pattern: '{element}'. Skipping.")
+                    else:
+                        raise ValueError(f"Unknown value for 'missing_file': '{missing_file}'")
+
+            else:
+                content.append(element)
+
+        # Get the locations of files in the list
+        file_locations = []
+        for i, string in enumerate(content):
+            if string in files:
+                file_locations.append(i)
+
+        # Sort files using natural sorting
+        file_list = [content[i] for i in file_locations]
+        file_list = natsorted(file_list)
+
+        # Return files to content in the correct order
+        for idx, string in zip(file_locations, file_list):
+            content[idx] = string
+
+        return content
+
     def _get_content(self, parameters):
         """ Get slide content based on input parameters. """
 
         # Establish content
         content = parameters.get("content", [])
-        if isinstance(content, str):
+        if not isinstance(content, list):
             content = [content]
 
         # Expand content files
-        content = glob_files(content)
+        content = self._glob_files(content, missing_file=parameters["missing_file"])
+        self.logger.debug(f"Globbed content: {content}")
 
         # Replace multipage pdfs if present
         content_converted = []  # don't alter original list
