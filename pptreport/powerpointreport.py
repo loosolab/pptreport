@@ -7,6 +7,8 @@ import re
 import subprocess
 import logging
 import sys
+import tempfile
+import fitz
 from natsort import natsorted
 
 # Pptx modules
@@ -143,7 +145,8 @@ class PowerPointReport():
         "filename_path": False,
         "fill_by": "row",
         "remove_placeholders": False,
-        "fontsize": None
+        "fontsize": None,
+        "pdf_pages": "all"
     }
 
     def __init__(self, template=None, size="standard", verbosity=0):
@@ -307,6 +310,11 @@ class PowerPointReport():
         if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
             raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
 
+        # If grouped_content is given, it should be a list
+        if "grouped_content" in parameters:
+            if not isinstance(parameters["grouped_content"], list):
+                raise TypeError("Invalid input. 'grouped_content' must be a list.")
+
         # Set outer margin -> left/right/top/bottom
         orig_parameters = parameters.copy()
         for k in list(parameters.keys()):
@@ -415,6 +423,8 @@ class PowerPointReport():
             Whether to remove empty placeholders from the slide, e.g. if title is not given. Default is False; to keep all placeholders. If True, empty placeholders will be removed.
         fontsize : float, default None
             Fontsize of text content. If None, the fontsize is automatically determined to fit the text in the textbox.
+        pdf_pages : int, list of int or "all", default "all"
+            Pages to be included from a multipage pdf. e.g. 1 (will include page 1), [1,3] will include pages 1 and 3. "all" includes all available pages.
         """
 
         self.logger.debug("Started adding slide")
@@ -439,24 +449,46 @@ class PowerPointReport():
 
             content_per_group = self._get_paired_content(parameters["grouped_content"])
 
+            tmp_files = []
             # Create one slide per group
             for group, content in content_per_group.items():
+
+                # Save original filenames / content
+                filenames = content[:]
+
+                # Convert pdf to png files
+                for idx, element in enumerate(content):
+                    if element is not None:  # single files may be missing for groups
+                        if element.endswith(".pdf"):
+                            img_files = self.convert_pdf(element, parameters["pdf_pages"])
+
+                            if len(img_files) > 1:
+                                raise ValueError(f"Multiple pages in pdf is not supported for grouped content. Found {len(img_files)} in {content}, as pdf_pages is set to '{parameters['pdf_pages']}'. "
+                                                 "Please adjust pdf_pages to only include one page, e.g. pdf_pages=1.")
+                            content[idx] = img_files[0]
+                            tmp_files.append(content[idx])
+
                 slide = self._setup_slide(parameters)
                 slide.title = f"Group: {group}" if slide.title is None else slide.title
                 slide.content = content
+                slide._filenames = filenames  # original filenames per content element
                 slide._fill_slide()
 
         else:
-
-            content = self._get_content(parameters)
+            content, filenames, tmp_files = self._get_content(parameters)
 
             # Create slide(s)
-            for slide_content in content:
+            for i, slide_content in enumerate(content):
 
                 # Setup an empty slide
                 slide = self._setup_slide(parameters)
                 slide.content = slide_content
+                slide._filenames = filenames[i]  # original filenames per content element
                 slide._fill_slide()  # Fill slide with content
+
+        # clean tmp files after adding content to slide(s)
+        for tmp_file in tmp_files:
+            os.remove(tmp_file)
 
         self.logger.debug("Finished adding slide")
         self.logger.debug("-" * 60)  # separator between slide logging
@@ -507,6 +539,66 @@ class PowerPointReport():
 
         return layout_obj
 
+    def convert_pdf(self, pdf, pdf_pages, dpi=300):
+        """ Convert a pdf file to a png file(s).
+
+        Parameters
+        ----------
+        pdf : str
+            pdf file to convert
+        pdf_pages: str, int
+            pages to include if pdf is a multipage pdf.
+            e.g. [1,2] gives firt two pages, all gives all pages
+        dpi : int, default 300
+            dpi of the output png file
+
+        Returns
+        -------
+        img_files: [str]
+            list containing converted filenames (in the tmp folder)
+        """
+
+        # open pdf with fitz module from pymupdf
+        doc = fitz.open(pdf)
+
+        # get page count
+        pages = doc.page_count
+        # span array over all available pages e.g. pages 3 transforms to [1,2,3]
+        pages = [i + 1 for i in range(pages)]
+
+        if pdf_pages is None:
+            raise IndexError(f"Index {pdf_pages} no valid Index.")
+
+        if isinstance(pdf_pages, str):
+            if pdf_pages.lower() == "all":
+                pdf_pages = pages
+            else:
+                raise ValueError(f"pdf_pages as string is expected to be 'all', but it is set to '{pdf_pages}'. Please set pdf_pages to 'all' or a list of integers.")
+        else:
+            if isinstance(pdf_pages, int):
+                pdf_pages = [pdf_pages]
+
+            # all index available? will also fail if index not int
+            index_mismatch = [page for page in pdf_pages if page not in pages]
+            if len(index_mismatch) != 0:
+                raise IndexError(f"Pages {index_mismatch} not available for {pdf}")
+
+        img_files = []
+        for page_num in pdf_pages:
+            # Create temporary file
+            temp_name = next(tempfile._get_candidate_names()) + ".png"
+            temp_dir = tempfile.gettempdir()
+            temp_file = os.path.join(temp_dir, temp_name)
+            self.logger.debug(f"Converting pdf page number{page_num} to temporary png at: {temp_file}")
+
+            # Convert pdf to png
+            page = doc.load_page(page_num - 1)  # page 1 is load() with 0
+            pix = page.get_pixmap(dpi=dpi)
+            pix.save(temp_file)
+            img_files.append(temp_file)
+
+        return img_files
+
     def _get_content(self, parameters):
         """ Get slide content based on input parameters. """
 
@@ -518,18 +610,39 @@ class PowerPointReport():
         # Expand content files
         content = glob_files(content)
 
+        # Replace multipage pdfs if present
+        content_converted = []  # don't alter original list
+        filenames = []
+        tmp_files = []
+        for element in content:
+            if isinstance(element, str) and element.endswith(".pdf"):  # avoid None or list type and only replace pdfs
+                img_files = self.convert_pdf(element, parameters.get("pdf_pages", "all"))
+
+                content_converted += img_files
+                filenames += [element] * len(img_files)  # replace filename with pdf name for each image
+                tmp_files += img_files
+
+                self.logger.debug(f"Replaced: {element} with {img_files}.")
+
+            else:
+                filenames += [element]
+                content_converted += [element]
+
+        content = content_converted
+
         # If split is false, content should be contained in one slide
         if parameters["split"] is False:
             content = [content]
+            filenames = [filenames]
         else:
             if len(content) == 0:
                 raise ValueError("Split is True, but 'content' is empty.")
             else:
-                content = glob_files(content)
                 if isinstance(parameters["split"], int):
                     content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
+                    filenames = [filenames[i:i + parameters["split"]] for i in range(0, len(filenames), parameters["split"])]
 
-        return content
+        return content, filenames, tmp_files
 
     def _get_paired_content(self, raw_content):
         """ Get content per group from a list of regex patterns.

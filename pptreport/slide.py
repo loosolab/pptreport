@@ -269,7 +269,7 @@ class Slide():
             heights = np.array(self.height_ratios) / sum(self.height_ratios) * total_height
 
         # Box coordinates
-        box_numbers = layout_matrix[~np.isnan(layout_matrix)].flatten()
+        box_numbers = layout_matrix[~np.isnan(layout_matrix)].flatten().astype(int)
         box_numbers = sorted(set(box_numbers))  # unique box numbers
         box_numbers = [box_number for box_number in box_numbers if box_number >= 0]  # remove negative numbers
         for i in box_numbers:
@@ -296,7 +296,11 @@ class Slide():
             width += (len(cols) - 1) * inner_margin_unit  # add inner margins between columns
 
             #  Create box
-            self.add_box((left, top, width, height))
+            box = self.add_box((left, top, width, height))
+
+            # Add original filename for the content
+            if i < len(self._filenames):  # if i == 2, and number of filenames is 2, index 2 is out of range. Happens if there are empty boxes
+                box._filename = self._filenames[i]
 
     def add_box(self, coordinates):
         """
@@ -318,6 +322,8 @@ class Slide():
 
         # Add box object to list
         self._boxes.append(box)
+
+        return box
 
     def fill_boxes(self):
         """ Fill the boxes with the elements in self.content """
