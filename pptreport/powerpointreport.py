@@ -593,15 +593,24 @@ class PowerPointReport():
 
         return img_files
 
-    def _glob_files(self, lst, missing_file="exit"):
+    def _glob_files(self, lst, missing_file="raise"):
         """ Expand list of files by globbing.
 
         Parameters
         ----------
         lst : [str]
             list of strings which might contain "*".
-        missing_file : str, default "exit"
-            What to do if no files are found for a glob pattern. If "exit", raise an error. If "warn", print a warning and continue.
+        missing_file : str, default "raise"
+            What to do if no files are found for a glob pattern. I
+            - If "raise", a FileNotFoundError will be raised.
+            - If "empty", None will be added to the content list.
+            - If "skip", this content pattern will be skipped completely.
+
+        Returns
+        -------
+        content : [str]
+            list of files/content
+
         """
 
         if isinstance(lst, str):
@@ -619,7 +628,7 @@ class PowerPointReport():
                 else:
 
                     if missing_file == "raise":
-                        raise FileNotFoundError(f"No files could be found for pattern: '{element}'. Adjust pattern or set missing_file='warn' to ignore the missing file.")
+                        raise FileNotFoundError(f"No files could be found for pattern: '{element}'. Adjust pattern or set missing_file='empty'/'skip' to ignore the missing file.")
                     elif missing_file == "empty":
                         self.logger.warning(f"No files could be found for pattern: '{element}'. Adding empty box.")
                         content.append(None)
