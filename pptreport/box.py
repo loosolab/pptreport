@@ -176,14 +176,15 @@ class Box():
         if content_type == "image":
             full_height = self.height
 
-            if self.show_filename:
+            if self.show_filename is not False:
                 # set height of filename to 1/10 of the textbox but at least 290000 (matches Calibri size 12) to ensure the text is still readable
                 text_height = max(self.height * 0.1, 290000)
                 text_top = self.top
                 self.height = full_height - text_height
                 self.top = self.top + text_height
             self.fill_image(content)
-            if self.show_filename:
+
+            if self.show_filename is not False:
                 self.height = text_height
                 self.top = text_top
                 vertical, horizontal = self._get_content_alignment()
@@ -193,8 +194,18 @@ class Box():
 
                 # Determine filename
                 filename = self._filename
-                if self.filename_path is False:
-                    filename = os.path.basename(filename)
+
+                if self.show_filename is True or self.show_filename == "filename":
+                    filename = os.path.splitext(os.path.basename(filename))[0]  # basename without extension
+                elif self.show_filename == "filename_ext":
+                    filename = os.path.basename(filename)  # basename with extension
+                elif self.show_filename == "filepath":
+                    filename = os.path.splitext(filename)[0]  # filepath without extension
+                elif self.show_filename == "filepath_ext":
+                    filename = filename  # filepath with extension (original full path)
+                elif self.show_filename == "path":
+                    filename = os.path.dirname(filename)  # path without filename
+
                 self.fill_text(filename, is_filename=True)
 
         elif content_type == "textfile":  # textfile can also contain markdown
