@@ -78,4 +78,3 @@ def test_show_filename(show_filename, expected):
 
     else:
         assert len(slide._slide.shapes) == 1
-
