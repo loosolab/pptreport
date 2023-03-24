@@ -56,6 +56,15 @@ def test_invalid_input(options):
         report.add_slide(**options)
 
 
+@pytest.mark.parametrize("options", [{"grouped_content": "text", "missing_file": list}])  # grouped_content has to be a list
+def test_typeerror(options):
+    """ Test that TypeError is raised when invalid type is given """
+
+    report = PowerPointReport()
+    with pytest.raises(TypeError):
+        report.add_slide(**options)
+
+
 @pytest.mark.parametrize("show_filename", [True, False, "True", "False"])
 def test_show_filename(show_filename):
     """ Assert that filenames are added (or not) to the slide """

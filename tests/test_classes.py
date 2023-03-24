@@ -227,13 +227,19 @@ def test_get_config(expand):
         assert isinstance(config["slides"][0]["content"], str)  # not expanded
 
 
-@pytest.mark.parametrize("pdf_pages", ["all", [1, 2]])
-def test_pdf_pages_grouped_error(pdf_pages):
+@pytest.mark.parametrize("pdf_pages, expected", [("all", ValueError),
+                                                 ([1, 2], ValueError),
+                                                 (1, None)])
+def test_pdf_pages_grouped(pdf_pages, expected):
 
     report = PowerPointReport()
 
-    with pytest.raises(ValueError):
-        report.add_slide(grouped_content=[content_dir + "pdfs/multidogs_([0-9]).pdf"], pdf_pages=pdf_pages)
+    if type(expected).__name__ == "type":
+        with pytest.raises(expected):
+            report.add_slide(grouped_content=[content_dir + "pdfs/multidogs_([0-9]).pdf"], pdf_pages=pdf_pages)
+    else:
+        report.add_slide(grouped_content=[content_dir + "pdfs/multidogs_([0-9]).pdf"], pdf_pages=pdf_pages)  # no error
+        assert len(report._slides[0]._boxes) == 1  # only one element in the slide
 
 
 @pytest.mark.parametrize("pdf_pages", ["all", 2, [1, 3], [2, 3, 3]])

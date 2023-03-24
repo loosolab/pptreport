@@ -98,6 +98,7 @@ The example file at [examples/report_config.json](examples/report_config.json) g
 | remove_placeholders | bool | Whether to remove empty placeholders from the slide, e.g. if title is not given, powerpoint will show an empty text box. Default is False; to keep all placeholders. If True, empty placeholders will be removed. | True |
 | fontsize | float | Fontsize of text content. If not given, the fontsize is automatically determined to fit the text in the textbox. | 12<br />10.5 |
 | pdf_pages| int or "all" | Pages to include if pdf is a multipage pdf. "all" includes all available pages| "all"<br />[1, 3]<br />2|
+|  missing_file | str | What to do if no files were found from a content pattern, e.g. "figure*.txt". Can be either "raise" (default), "empty" or "skip": <br />- "raise": a FileNotFoundError will be raised.<br />- "empty": an empty content box will be added for the missing content pattern.<br />- "skip": this content pattern will be skipped (no box added). | "raise"<br />"empty"<br />"skip" |
 
 ## Source of example images
 
