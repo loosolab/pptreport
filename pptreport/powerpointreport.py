@@ -42,43 +42,6 @@ def get_default_args(func):
     return defaults
 
 
-def glob_files(lst):
-    """ Glob files in a list of strings which might contain "*". If no files are found for glob, raise an error. """
-
-    if isinstance(lst, str):
-        lst = [lst]
-
-    content = []  # flattened list of files
-    files = []  # names of files in the list
-    for element in lst:
-        if element is not None and "*" in element:
-            globbed = glob.glob(element)
-            if len(globbed) > 0:
-                for file in globbed:
-                    files.append(file)
-                    content.append(file)
-            else:
-                raise ValueError(f"No files could be found for pattern: '{element}'")
-        else:
-            content.append(element)
-
-    # Get the locations of files in the list
-    file_locations = []
-    for i, string in enumerate(content):
-        if string in files:
-            file_locations.append(i)
-
-    # Sort files using natural sorting
-    file_list = [content[i] for i in file_locations]
-    file_list = natsorted(file_list)
-
-    # Return files to content in the correct order
-    for idx, string in zip(file_locations, file_list):
-        content[idx] = string
-
-    return content
-
-
 def get_files_in_dir(directory):
     """ Get all files in the given directory including the path prefix """
 
@@ -117,6 +80,28 @@ def replace_quotes(string):
     return string
 
 
+def convert_to_bool(value):
+    """ Convert a value to a boolean type. """
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        if value.lower() in ["true", "1", "t", "y", "yes"]:
+            return True
+        elif value.lower() in ["false", "0", "f", "n", "no"]:
+            return False
+        else:
+            raise ValueError(f"Could not convert string '{value}' to a boolean value.")
+
+    else:
+        try:
+            converted = bool(value)  # can convert 1 to True and 0 to False
+            return converted
+        except Exception:
+            raise ValueError(f"Could not convert '{value}' to a boolean value.")
+
+
 ###############################################################################
 # -------------------- Class for building presentation ---------------------- #
 ###############################################################################
@@ -142,11 +127,11 @@ class PowerPointReport():
         "split": False,
         "show_filename": False,
         "filename_alignment": "center",
-        "filename_path": False,
         "fill_by": "row",
         "remove_placeholders": False,
         "fontsize": None,
-        "pdf_pages": "all"
+        "pdf_pages": "all",
+        "missing_file": "raise"
     }
 
     def __init__(self, template=None, size="standard", verbosity=0):
@@ -169,7 +154,7 @@ class PowerPointReport():
         Parameters
         ----------
         verbosity : int, default 1
-            The verbosity of the logger. 0: ERROR, 1: INFO, 2: DEBUG
+            The verbosity of the logger. 0: ERROR and WARNINGS, 1: INFO, 2: DEBUG
 
         Returns
         -------
@@ -335,18 +320,40 @@ class PowerPointReport():
             except ValueError:
                 raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
 
-        # Format boolean parameters to bool
-        bool_parameters = [key for key, value in self._default_slide_parameters.items() if isinstance(value, bool)]
+        # Format "split" to int or bool
+        if "split" in parameters:
+            try:  # try to convert to int first, e.g. if input is "2"
+                parameters["split"] = int(parameters["split"])
+            except Exception:  # if not possible, convert to bool
+                parameters["split"] = convert_to_bool(parameters["split"])
+
+        # Format other purely boolean parameters to bool
+        bool_parameters = ["remove_placeholders"]
         for param in bool_parameters:
             if param in parameters:
-                value = parameters[param]
+                parameters[param] = convert_to_bool(parameters[param])
+
+        # Format show_filename
+        if "show_filename" in parameters:
+            value = parameters["show_filename"]
+            try:
+                parameters["show_filename"] = convert_to_bool(value)
+            except ValueError as e:  # if the value is not a bool, it should be a string
                 if isinstance(value, str):
-                    if value.lower() in ["true", "1", "t", "y", "yes"]:
-                        parameters[param] = True
-                    elif value.lower() in ["false", "0", "f", "n", "no"]:
-                        parameters[param] = False
-                    else:
-                        raise ValueError(f"Could not convert '{param}' parameter to bool. The given value is: '{value}'. Please use 'True' or 'False'.")
+                    valid = ["filename", "filename_ext", "filepath", "filepath_ext", "path"]
+                    if value not in valid:
+                        raise ValueError(f"Invalid parameter for 'show_filename'. The given value is: '{value}'. Please use one of the following: {valid}")
+                else:
+                    raise e  # raise the original error
+
+        # Validate missing_file
+        if "missing_file" in parameters:
+            if not isinstance(parameters["missing_file"], str):
+                raise TypeError("Invalid input for 'missing_file' - must be either 'raise', 'empty' or 'skip'")
+            else:
+                parameters["missing_file"] = parameters["missing_file"].lower()
+                if parameters["missing_file"] not in ["raise", "empty", "skip"]:
+                    raise ValueError(f"Invalid input '{parameters['missing_file']}' for 'missing_file'. Must be either 'raise', 'empty' or 'skip'.")
 
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
@@ -410,13 +417,17 @@ class PowerPointReport():
             Notes for the slide. Can be either a path to a text file or a string.
         split : bool or int, default False
             Split the content into multiple slides. If True, the content will be split into one-slide-per-element. If an integer, the content will be split into slides with that many elements per slide.
-        show_filename : bool, default False
-            Filenames for images. If True, the filename of the image will be displayed above the image.
+        show_filename : bool or str, default False
+            Show filenames above images. The style of filename displayed depends on the value given:
+            - True or "filename": the filename without path and extension (e.g. "image")
+            - "filename_ext": the filename without path but with extension (e.g. "image.png")
+            - "filepath": the full path of the image (e.g. "/home/user/image")
+            - "filepath_ext": the full path of the image with extension (e.g. "/home/user/image.png")
+            - "path": the path of the image without filename (e.g. "/home/user")
+            - False: no filename is shown (default)
         filename_alignment : str, default "center"
             Horizontal alignment of the filename. Can be "left", "right" and "center".
             The default is "center", which will align the content centered horizontally.
-        filename_path : bool, default False
-            Whether to show the full path of the filename or just the filename. Default is False, which will only show the filename.
         fill_by : str, default "row"
             If slide_layout is grid or custom, choose to fill the grid row-by-row or column-by-column. 'fill_by' can be "row" or "column".
         remove_placeholders : str, default False
@@ -425,6 +436,11 @@ class PowerPointReport():
             Fontsize of text content. If None, the fontsize is automatically determined to fit the text in the textbox.
         pdf_pages : int, list of int or "all", default "all"
             Pages to be included from a multipage pdf. e.g. 1 (will include page 1), [1,3] will include pages 1 and 3. "all" includes all available pages.
+        missing_file : str, default "raise"
+            What to do if no files were found from a content pattern, e.g. "figure*.txt". Can be either "raise", "empty" or "skip".
+            - If "raise", a FileNotFoundError will be raised.
+            - If "empty", an empty content box will be added for the content pattern and 'add_slide' will continue without error.
+            - If "skip", this content pattern will be skipped (no box added).
         """
 
         self.logger.debug("Started adding slide")
@@ -599,16 +615,80 @@ class PowerPointReport():
 
         return img_files
 
+    def _glob_files(self, lst, missing_file="raise"):
+        """ Expand list of files by globbing.
+
+        Parameters
+        ----------
+        lst : [str]
+            list of strings which might contain "*".
+        missing_file : str, default "raise"
+            What to do if no files are found for a glob pattern. I
+            - If "raise", a FileNotFoundError will be raised.
+            - If "empty", None will be added to the content list.
+            - If "skip", this content pattern will be skipped completely.
+
+        Returns
+        -------
+        content : [str]
+            list of files/content
+
+        """
+
+        if isinstance(lst, str):
+            lst = [lst]
+
+        content = []  # flattened list of files
+        files = []    # names of files in the list
+        for element in lst:
+            if element is not None and "*" in element:
+                globbed = glob.glob(element)
+                if len(globbed) > 0:
+                    for file in globbed:
+                        files.append(file)
+                        content.append(file)
+                else:
+
+                    if missing_file == "raise":
+                        raise FileNotFoundError(f"No files could be found for pattern: '{element}'. Adjust pattern or set missing_file='empty'/'skip' to ignore the missing file.")
+                    elif missing_file == "empty":
+                        self.logger.warning(f"No files could be found for pattern: '{element}'. Adding empty box.")
+                        content.append(None)
+                    elif missing_file == "skip":
+                        self.logger.warning(f"No files could be found for pattern: '{element}'. Skipping.")
+                    else:
+                        raise ValueError(f"Unknown value for 'missing_file': '{missing_file}'")
+
+            else:
+                content.append(element)
+
+        # Get the locations of files in the list
+        file_locations = []
+        for i, string in enumerate(content):
+            if string in files:
+                file_locations.append(i)
+
+        # Sort files using natural sorting
+        file_list = [content[i] for i in file_locations]
+        file_list = natsorted(file_list)
+
+        # Return files to content in the correct order
+        for idx, string in zip(file_locations, file_list):
+            content[idx] = string
+
+        return content
+
     def _get_content(self, parameters):
         """ Get slide content based on input parameters. """
 
         # Establish content
         content = parameters.get("content", [])
-        if isinstance(content, str) or content is None:
+        if not isinstance(content, list):
             content = [content]
 
         # Expand content files
-        content = glob_files(content)
+        content = self._glob_files(content, missing_file=parameters["missing_file"])
+        self.logger.debug(f"Globbed content: {content}")
 
         # Replace multipage pdfs if present
         content_converted = []  # don't alter original list

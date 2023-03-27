@@ -56,17 +56,36 @@ def test_invalid_input(options):
         report.add_slide(**options)
 
 
-@pytest.mark.parametrize("show_filename", [True, False, "True", "False"])
-def test_show_filename(show_filename):
+@pytest.mark.parametrize("options", [{"grouped_content": "text"},  # grouped_content has to be a list
+                                     {"missing_file": list}       # missing file should be bool or string
+                                     ])
+def test_typeerror(options):
+    """ Test that TypeError is raised when invalid type is given """
+
+    report = PowerPointReport()
+    with pytest.raises(TypeError):
+        report.add_slide(**options)
+
+
+@pytest.mark.parametrize("show_filename, expected", [(True, "cat"),
+                                                     ("True", "cat"),
+                                                     ("filename", "cat"),
+                                                     ("filename_ext", "cat.jpg"),
+                                                     ("filepath", content_dir + "cat"),
+                                                     ("filepath_ext", content_dir + "cat.jpg"),
+                                                     ("path", content_dir[:-1]),  # remove last slash
+                                                     (False, None),
+                                                     ("False", None)])
+def test_show_filename(show_filename, expected):
     """ Assert that filenames are added (or not) to the slide """
 
     report = PowerPointReport()
-    report.add_slide(content_dir + "cat.jpg", show_filename=show_filename)  # remove_placeholders=True)
-
+    report.add_slide(content_dir + "cat.jpg", show_filename=show_filename, remove_placeholders=True)
     slide = report._slides[0]
-    n_placeholders = len(slide._slide.placeholders)
-    if slide.show_filename:
-        assert len(slide._slide.shapes) - n_placeholders == 2
-        assert slide._slide.shapes[-1].text == "cat.jpg"
+
+    if isinstance(expected, str):
+        assert len(slide._slide.shapes) == 2
+        assert slide._slide.shapes[-1].text == expected
+
     else:
-        assert len(slide._slide.shapes) - n_placeholders == 1
+        assert len(slide._slide.shapes) == 1
