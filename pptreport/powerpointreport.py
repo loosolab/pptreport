@@ -117,6 +117,28 @@ def replace_quotes(string):
     return string
 
 
+def convert_to_bool(value):
+    """ Convert a value to a boolean type. """
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        if value.lower() in ["true", "1", "t", "y", "yes"]:
+            return True
+        elif value.lower() in ["false", "0", "f", "n", "no"]:
+            return False
+        else:
+            raise ValueError(f"Could not convert string '{value}' to a boolean value.")
+
+    else:
+        try:
+            converted = bool(value)  # can convert 1 to True and 0 to False
+            return converted
+        except Exception:
+            raise ValueError(f"Could not convert '{value}' to a boolean value.")
+
+
 ###############################################################################
 # -------------------- Class for building presentation ---------------------- #
 ###############################################################################
@@ -142,7 +164,6 @@ class PowerPointReport():
         "split": False,
         "show_filename": False,
         "filename_alignment": "center",
-        "filename_path": False,
         "fill_by": "row",
         "remove_placeholders": False,
         "fontsize": None,
@@ -334,18 +355,31 @@ class PowerPointReport():
             except ValueError:
                 raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
 
-        # Format boolean parameters to bool
-        bool_parameters = [key for key, value in self._default_slide_parameters.items() if isinstance(value, bool)]
+        # Format "split" to int or bool
+        if "split" in parameters:
+            try:  # try to convert to int first, e.g. if input is "2"
+                parameters["split"] = int(parameters["split"])
+            except Exception:  # if not possible, convert to bool
+                parameters["split"] = convert_to_bool(parameters["split"])
+
+        # Format other purely boolean parameters to bool
+        bool_parameters = ["remove_placeholders"]
         for param in bool_parameters:
             if param in parameters:
-                value = parameters[param]
+                parameters[param] = convert_to_bool(parameters[param])
+
+        # Format show_filename
+        if "show_filename" in parameters:
+            value = parameters["show_filename"]
+            try:
+                parameters["show_filename"] = convert_to_bool(value)
+            except ValueError as e:  # if the value is not a bool, it should be a string
                 if isinstance(value, str):
-                    if value.lower() in ["true", "1", "t", "y", "yes"]:
-                        parameters[param] = True
-                    elif value.lower() in ["false", "0", "f", "n", "no"]:
-                        parameters[param] = False
-                    else:
-                        raise ValueError(f"Could not convert '{param}' parameter to bool. The given value is: '{value}'. Please use 'True' or 'False'.")
+                    valid = ["filename", "filename_ext", "filepath", "filepath_ext", "path"]
+                    if value not in valid:
+                        raise ValueError(f"Invalid parameter for 'show_filename'. The given value is: '{value}'. Please use one of the following: {valid}")
+                else:
+                    raise e  # raise the original error
 
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
@@ -431,13 +465,17 @@ class PowerPointReport():
             Notes for the slide. Can be either a path to a text file or a string.
         split : bool or int, default False
             Split the content into multiple slides. If True, the content will be split into one-slide-per-element. If an integer, the content will be split into slides with that many elements per slide.
-        show_filename : bool, default False
-            Filenames for images. If True, the filename of the image will be displayed above the image.
+        show_filename : bool or str, default False
+            Show filenames above images. The style of filename displayed depends on the value given:
+            - True or "filename": the filename without path and extension (e.g. "image")
+            - "filename_ext": the filename without path but with extension (e.g. "image.png")
+            - "filepath": the full path of the image (e.g. "/home/user/image")
+            - "filepath_ext": the full path of the image with extension (e.g. "/home/user/image.png")
+            - "path": the path of the image without filename (e.g. "/home/user")
+            - False: no filename is shown (default)
         filename_alignment : str, default "center"
             Horizontal alignment of the filename. Can be "left", "right" and "center".
             The default is "center", which will align the content centered horizontally.
-        filename_path : bool, default False
-            Whether to show the full path of the filename or just the filename. Default is False, which will only show the filename.
         fill_by : str, default "row"
             If slide_layout is grid or custom, choose to fill the grid row-by-row or column-by-column. 'fill_by' can be "row" or "column".
         remove_placeholders : str, default False
