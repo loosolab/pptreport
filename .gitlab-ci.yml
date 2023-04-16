@@ -66,6 +66,7 @@ tests:
       - pptreport/*.py
     - if: $CI_PIPELINE_SOURCE == "merge_request_event" # all MR
       when: manual  # if changes in files; or if manual
+      allow_failure: True  # the manual rule is allowed to fail
     - if: $CI_COMMIT_BRANCH == "dev"  # all commits to dev
     - if: $CI_COMMIT_BRANCH == "main" # or main; ensures that coverage is available for badges
 
