@@ -621,7 +621,7 @@ class PowerPointReport():
             files_found = []   # names of files found for this element
 
             # If the number of words in element is 1, it could be a file
-            if len(element.split()) == 1:
+            if element is not None and len(element.split()) == 1:
 
                 element = element.rstrip().lstrip()  # remove trailing and leading spaces to avoid problems with globbing
 
