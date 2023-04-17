@@ -22,33 +22,11 @@ from pptreport.slide import Slide
 ###############################################################################
 
 
-def flatten_list(lst):
-    """ Flatten a list containing both lists and non-lists """
-
-    flat = []
-    for element in lst:
-        if isinstance(element, list):
-            flat.extend(element)
-        else:
-            flat.append(element)
-
-    return flat
-
-
 def get_default_args(func):
     signature = inspect.signature(func)
     defaults = {k: v.default for k, v in signature.parameters.items() if v.default is not inspect.Parameter.empty}
 
     return defaults
-
-
-def get_files_in_dir(directory):
-    """ Get all files in the given directory including the path prefix """
-
-    files = os.listdir(directory)
-    files = [os.path.join(directory, file) for file in files]
-
-    return files
 
 
 def fill_dict(d1, d2):
@@ -301,8 +279,9 @@ class PowerPointReport():
                 raise TypeError("Invalid input. 'grouped_content' must be a list.")
 
         # Set outer margin -> left/right/top/bottom
+        orig_parameters = parameters.copy()
         for k in list(parameters.keys()):
-            v = parameters[k]
+            v = orig_parameters[k]
 
             if k == "outer_margin":
                 parameters["left_margin"] = v
@@ -378,30 +357,7 @@ class PowerPointReport():
 
     def add_slide(self,
                   content=None,
-                  grouped_content=None,
-                  title=None,
-                  slide_layout=None,
-                  content_layout=None,
-                  content_alignment=None,
-                  outer_margin=None,
-                  inner_margin=None,
-                  left_margin=None,
-                  right_margin=None,
-                  top_margin=None,
-                  bottom_margin=None,
-                  n_columns=None,
-                  width_ratios=None,
-                  height_ratios=None,
-                  notes=None,
-                  split=None,
-                  show_filename=None,
-                  filename_alignment=None,
-                  filename_path=None,
-                  fill_by=None,
-                  remove_placeholders=None,
-                  fontsize=None,
-                  pdf_pages=None,
-                  missing_file=None
+                  **kwargs   # arguments given as a dictionary; ensures control over the order of the arguments
                   ):
         """
         Add a slide to the presentation.
@@ -465,10 +421,13 @@ class PowerPointReport():
             - If "skip", this content pattern will be skipped (no box added).
         """
 
-        # Get input parameters; all function defaults are None to distinguish between given arguments and global defaults
-        parameters = locals()
+        self.logger.debug("Started adding slide")
+
+        # Get input parameters;
+        parameters = {}
+        parameters["content"] = content
+        parameters.update(kwargs)
         parameters = {k: v for k, v in parameters.items() if v is not None}
-        parameters.pop("self")
         self.add_to_config(parameters)
         self.logger.debug(f"Input parameters: {parameters}")
 
@@ -498,7 +457,7 @@ class PowerPointReport():
                             img_files = self.convert_pdf(element, parameters["pdf_pages"])
 
                             if len(img_files) > 1:
-                                raise ValueError(f"Multiple pages in pdf is not supported for grouped content. Found {len(img_files)} in {content}, as pdf_pages is set to '{pdf_pages}."
+                                raise ValueError(f"Multiple pages in pdf is not supported for grouped content. Found {len(img_files)} in {content}, as pdf_pages is set to '{parameters['pdf_pages']}'. "
                                                  "Please adjust pdf_pages to only include one page, e.g. pdf_pages=1.")
                             content[idx] = img_files[0]
                             tmp_files.append(content[idx])
@@ -524,6 +483,9 @@ class PowerPointReport():
         # clean tmp files after adding content to slide(s)
         for tmp_file in tmp_files:
             os.remove(tmp_file)
+
+        self.logger.debug("Finished adding slide")
+        self.logger.debug("-" * 60)  # separator between slide logging
 
     def _setup_slide(self, parameters):
         """ Initialize an empty slide with a given layout. """
@@ -631,13 +593,13 @@ class PowerPointReport():
 
         return img_files
 
-    def _glob_files(self, lst, missing_file="raise"):
-        """ Expand list of files by globbing.
+    def _expand_files(self, lst, missing_file="raise"):
+        """ Expand list of files by unix globbing or regex.
 
         Parameters
         ----------
         lst : [str]
-            list of strings which might contain "*".
+            list of strings which might (or might not) contain "*" or regex pattern.
         missing_file : str, default "raise"
             What to do if no files are found for a glob pattern. I
             - If "raise", a FileNotFoundError will be raised.
@@ -648,22 +610,33 @@ class PowerPointReport():
         -------
         content : [str]
             list of files/content
-
         """
 
         if isinstance(lst, str):
             lst = [lst]
 
-        content = []  # flattened list of files
-        files = []    # names of files in the list
+        content = []  # list of files/content
         for element in lst:
-            if element is not None and "*" in element:
-                globbed = glob.glob(element)
-                if len(globbed) > 0:
-                    for file in globbed:
-                        files.append(file)
-                        content.append(file)
-                else:
+
+            files_found = []   # names of files found for this element
+
+            # If the number of words in element is 1, it could be a file
+            if element is not None and len(element.split()) == 1:
+
+                element = element.rstrip().lstrip()  # remove trailing and leading spaces to avoid problems with globbing
+
+                # Try to glob files with unix globbing
+                if element is not None:
+                    globbed = glob.glob(element)
+                    files_found.extend(globbed)
+
+                # If no files were found by globbing, try to find files by regex
+                if len(files_found) == 0:
+                    globbed = self._glob_regex(element)
+                    files_found.extend(globbed)
+
+                # Add files to content list if found
+                if len(files_found) == 0 and "*" in element:
 
                     if missing_file == "raise":
                         raise FileNotFoundError(f"No files could be found for pattern: '{element}'. Adjust pattern or set missing_file='empty'/'skip' to ignore the missing file.")
@@ -675,24 +648,25 @@ class PowerPointReport():
                     else:
                         raise ValueError(f"Unknown value for 'missing_file': '{missing_file}'")
 
-            else:
+                elif len(files_found) > 0:
+                    content.append(files_found)
+
+                else:  # no files were found; content is treated as text
+                    content.append(element)
+
+            else:  # spaces in text; content is treated as text
                 content.append(element)
 
-        # Get the locations of files in the list
-        file_locations = []
-        for i, string in enumerate(content):
-            if string in files:
-                file_locations.append(i)
+        # Get the sorted list of files / content
+        content_sorted = []  # flattened list of files/content
+        for element in content:
+            if isinstance(element, list):
+                sorted_lst = natsorted(element)
+                content_sorted.extend(sorted_lst)
+            else:
+                content_sorted.append(element)
 
-        # Sort files using natural sorting
-        file_list = [content[i] for i in file_locations]
-        file_list = natsorted(file_list)
-
-        # Return files to content in the correct order
-        for idx, string in zip(file_locations, file_list):
-            content[idx] = string
-
-        return content
+        return content_sorted
 
     def _get_content(self, parameters):
         """ Get slide content based on input parameters. """
@@ -703,8 +677,8 @@ class PowerPointReport():
             content = [content]
 
         # Expand content files
-        content = self._glob_files(content, missing_file=parameters["missing_file"])
-        self.logger.debug(f"Globbed content: {content}")
+        content = self._expand_files(content, missing_file=parameters["missing_file"])
+        self.logger.debug(f"Expanded content: {content}")
 
         # Replace multipage pdfs if present
         content_converted = []  # don't alter original list
@@ -740,6 +714,49 @@ class PowerPointReport():
 
         return content, filenames, tmp_files
 
+    def _glob_regex(self, pattern):
+        """ Find all files in a directory that match a regex.
+
+        Parameters
+        ----------
+        pattern : str
+            Regex pattern to match files against.
+
+        Returns
+        -------
+        matched_files : list of str
+            List of files that match the regex pattern.
+        """
+
+        # Remove ( and ) from regex as they are only used to group regex later
+        pattern_clean = re.sub(r'(?<!\\)[\(\)]', '', pattern)
+        self.logger.debug(f"Finding files for possible regex pattern: {pattern_clean}")
+
+        # Find highest existing directory (as some directories might be regex)
+        directory = os.path.dirname(pattern_clean)
+        while not os.path.exists(directory):
+            directory = os.path.dirname(directory)
+            if directory == "":
+                break  # reached root directory
+
+        # Prepare regex for file search
+        pattern = re.sub(r'(?<!\\)/', r'\\/', pattern)  # Automatically escape / in regex (if not already escaped)
+        try:
+            pattern_compiled = re.compile(pattern)
+        except re.error:
+            raise ValueError(f"Invalid regex: {pattern}")
+
+        # Find all files that match the regex
+        search_glob = os.path.join(directory, "**")
+        matched_files = []
+        for file in glob.iglob(search_glob, recursive=True):
+            if pattern_compiled.match(file):
+                matched_files.append(file)
+
+        self.logger.debug(f"Found files: {matched_files}")
+
+        return matched_files
+
     def _get_paired_content(self, raw_content):
         """ Get content per group from a list of regex patterns.
 
@@ -759,23 +776,12 @@ class PowerPointReport():
         for i, pattern in enumerate(raw_content):
             group_content[i] = {}
 
-            self.logger.debug(f"Finding files for pattern: {pattern}")
+            files = self._glob_regex(pattern)
 
-            # Establish folder and all files in it
-            dirname = os.path.dirname(pattern)
-            dirname = "." if dirname == "" else dirname
-            files = get_files_in_dir(dirname)
-
-            # Find all files that match the regex
-            try:
-                pattern_compiled = re.compile(pattern)
-            except re.error:
-                raise ValueError(f"Invalid regex: {pattern}")
-
-            # Find all files that match the regex
+            # Find all groups within the regex
             for fil in files:
 
-                m = pattern_compiled.match(fil)
+                m = re.match(pattern, fil)
                 if m:  # if there was a match
 
                     groups = m.groups()

@@ -1,6 +1,6 @@
 import numpy as np
 import os
-from pptx.util import Cm
+from pptx.util import Emu, Cm
 from pptreport.box import Box
 import warnings
 from numpy import VisibleDeprecationWarning
@@ -36,6 +36,12 @@ class Slide():
 
     def set_layout_matrix(self):
         """ Get the content layout matrix for the slide. """
+
+        # Check validity of n_columns
+        try:
+            self.n_columns = int(self.n_columns)
+        except ValueError:
+            raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{self.n_columns}'. Please use an integer.")
 
         # Get variables from self
         layout = self.content_layout
@@ -73,6 +79,56 @@ class Slide():
             layout_matrix = self._validate_layout(layout)  # check if layout is a valid matrix
 
         self._layout_matrix = layout_matrix
+
+    # ------------------------ Validate options ------------------------#
+    def _validate_margins(self):
+        """ Check whether the given margins are valid """
+
+        margins = {"outer_margin": self.outer_margin, "inner_margin": self.inner_margin, "left_margin": self.left_margin, "right_margin": self.right_margin,
+                   "top_margin": self.top_margin, "bottom_margin": self.bottom_margin}
+
+        for margin, value in margins.items():
+            if value is not None:
+
+                # Check whether value is a float
+                try:
+                    value = float(value)
+                    setattr(self, margin, value)
+                except ValueError:
+                    raise ValueError(f"Could not convert '{margin}' to a float. The given value is: {value}")
+
+                # Check whether value is positive
+                if value < 0:
+                    raise ValueError(f"Margin '{margin}' cannot be negative. The given value is: {value}")
+
+                # Check upper margin sizes
+
+    def _validate_ratios(self):
+        """ Validate the values of width and height ratios """
+
+        parameters = ["width_ratios", "height_ratios"]
+
+        for param in parameters:
+
+            value = getattr(self, param)
+
+            if value is None:
+                continue
+
+            # Convert from string to list
+            if isinstance(value, str):
+                try:
+                    value = [v for v in value.split(",")]
+                except ValueError:
+                    raise ValueError(f"Could not convert '{param}' parameter to list of values. The given value is: '{value}'. Please use a list of values.")
+
+            # Convert from list of strings to list of floats
+            try:
+                value = [float(v) for v in value]
+            except Exception:
+                raise ValueError(f"Could not convert '{param}' parameter to list of values. The given value is: '{value}'. Please use a list of values.")
+
+            setattr(self, param, value)  # Set the new value
 
     @staticmethod
     def _validate_layout(layout_matrix):
@@ -114,6 +170,12 @@ class Slide():
 
         if self.title is not None:
 
+            # Make sure that title is a string
+            try:
+                self.title = str(self.title)
+            except Exception:
+                raise ValueError(f"Could not convert 'title' to a string. The given value is: '{self.title}'.")
+
             if self._slide.shapes.title is None:
                 self.logger.warning("Could not set title of slide. The slide does not have a title box.")
             else:
@@ -148,34 +210,54 @@ class Slide():
         layout_matrix = self._layout_matrix
         nrows, ncols = layout_matrix.shape
 
+        # Check that margins are valid
+        self._validate_margins()
+
         # Establish left/right/top/bottom margins (in cm)
         left_margin = self.outer_margin if self.left_margin is None else self.left_margin
         right_margin = self.outer_margin if self.right_margin is None else self.right_margin
         top_margin = self.outer_margin if self.top_margin is None else self.top_margin
         bottom_margin = self.outer_margin if self.bottom_margin is None else self.bottom_margin
+        inner_margin = self.inner_margin
 
         # Convert margins from cm to pptx units
         left_margin_unit = Cm(left_margin)
         right_margin_unit = Cm(right_margin)
         top_margin_unit = Cm(top_margin)
         bottom_margin_unit = Cm(bottom_margin)
-        inner_margin_unit = Cm(self.inner_margin)
+        inner_margin_unit = Cm(inner_margin)
 
         # Add to top margin based on size of title
         if self._slide.shapes.title.text != "":
-            top_margin_unit = self._slide.shapes.title.top + self._slide.shapes.title.height + top_margin_unit
-        # else:
-        #    sp = self._slide.shapes.title.element
-        #    sp.getparent().remove(sp) # remove title box if title is empty
+            title_margin_unit = Emu(self._slide.shapes.title.top + self._slide.shapes.title.height)
+        else:
+            title_margin_unit = Emu(0)
 
         # How many columns and rows are there?
         n_rows, n_cols = layout_matrix.shape
 
         # Get total height and width of pictures
-        total_width = self._slide_width - left_margin_unit - right_margin_unit - (n_cols - 1) * inner_margin_unit
-        total_height = self._slide_height - top_margin_unit - bottom_margin_unit - (n_rows - 1) * inner_margin_unit
+        margin_width = Emu(left_margin_unit + right_margin_unit + (n_cols - 1) * inner_margin_unit)
+        margin_height = Emu(top_margin_unit + bottom_margin_unit + (n_rows - 1) * inner_margin_unit + title_margin_unit)
+        total_width = self._slide_width - margin_width     # available width for content
+        total_height = self._slide_height - margin_height  # available height for content
+
+        # Check if total_width < 0
+        if total_width < 0:
+            raise ValueError(f"The width of content is negative. The slide width is {self._slide_width.cm:.1f}cm, but the total width of left, right and inner margins is {margin_width.cm}cm. "
+                             f"Please adjust the margins to make room for content. Given margins are: "
+                             f"left margin={left_margin}cm, right margin={right_margin}cm, inner margin={inner_margin}cm")
+
+        # Check if total_height < 0
+        if total_height < 0:
+            available_height = self._slide_height.cm - title_margin_unit.cm
+            raise ValueError(f"The height of content is negative. The available content height is {available_height:.1f}cm (slide height {self._slide_height.cm:.1f}cm - title height {title_margin_unit.cm:.1f}cm), "
+                             f"but the total height of top, bottom and inner margins is {margin_height.cm:.1f}cm. "
+                             f"Please adjust the margins to make room for content. Given margins are: "
+                             f"top margin={top_margin}cm, bottom margin={bottom_margin}cm, inner margin={inner_margin}cm")
 
         # Get column widths and row heights
+        self._validate_ratios()
         if self.width_ratios is None:
             widths = (np.ones(ncols) / ncols) * total_width
         else:
@@ -198,7 +280,7 @@ class Slide():
             # Get upper left corner of box
             row, col = coordinates[0]
             left = left_margin_unit + np.sum(widths[:col]) + col * inner_margin_unit
-            top = top_margin_unit + np.sum(heights[:row]) + row * inner_margin_unit
+            top = top_margin_unit + np.sum(heights[:row]) + row * inner_margin_unit + title_margin_unit
 
             # Get total width and height of box (can span multiple columns and rows)
             width = 0
