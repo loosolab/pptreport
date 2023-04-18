@@ -69,6 +69,148 @@ def test_get_config_global():
         assert key not in config["slides"][1]
 
 
+@pytest.mark.parametrize("size, valid", [("standard", True),
+                                         ("widescreen", True),
+                                         ("a4-portrait", True),
+                                         ("a4-landscape", True),
+                                         ((10, 10), True),
+                                         (("10", "10"), True),
+                                         ((10, 10, 10), False),
+                                         ("invalid", False)])
+def test_set_size(size, valid):
+    """ Test that set_size works """
+
+    report = PowerPointReport()
+
+    if valid:
+        report.set_size(size)
+    else:
+        with pytest.raises(ValueError):
+            report.set_size(size)
+
+
+def test_borders():
+    """ Test that borders of boxes can be added and removed from all slides"""
+
+    report = PowerPointReport()
+    report.add_slide("A text")
+
+    # Add borders
+    report.add_borders()
+    assert report._slides[0]._boxes[0].border is not None
+
+    # Remove borders
+    report.remove_borders()
+    assert report._slides[0]._boxes[0].border is None
+
+
+@pytest.mark.parametrize("verbosity", [0, 1, 2])
+def test_logger(capfd, verbosity):
+    """ Test that the logger levels are correct """
+
+    report = PowerPointReport(verbosity=verbosity)
+    report.add_slide("A text")
+    out, _ = capfd.readouterr()
+
+    if verbosity == 0:
+        assert out == ""
+    elif verbosity == 1:
+        assert "[INFO]" in out and "[DEBUG]" not in out
+    elif verbosity == 2:
+        assert "[INFO]" in out and "[DEBUG]" in out
+
+
+def test_logger_invalid():
+    """ Test that an invalid verbosity level raises an error """
+
+    with pytest.raises(ValueError):
+        _ = PowerPointReport(verbosity=3)
+
+
+@pytest.mark.parametrize("slide_layout, valid", [("Title Slide", True),
+                                                 (0, True),
+                                                 ("Invalid slide", False),  # Invalid slide name
+                                                 (100, False),  # Invalid slide number
+                                                 ([""], False)  # Invalid type
+                                                 ])
+def test_slide_layout(slide_layout, valid):
+    """ Test that slide_layout is correctly validated """
+    report = PowerPointReport()
+
+    if valid:
+        report.add_slide("A text", slide_layout=slide_layout)
+
+    else:
+        with pytest.raises(Exception):
+            report.add_slide("A text", slide_layout=slide_layout)
+
+
+@pytest.mark.parametrize("notes, valid", [("A note", True),
+                                          (["A note", "Another note"], True),
+                                          ("examples/content/fish_description.txt", True),
+                                          (dict, False),
+                                          ([dict], False)
+                                          ])
+def test_add_notes(notes, valid):
+    """ Test that notes can be added to slides, and that an error is thrown if the notes are invalid """
+
+    report = PowerPointReport()
+
+    if valid:
+        report.add_slide("A text", notes=notes)
+    else:
+        with pytest.raises(ValueError, match="Notes must be either a string or a list of strings."):
+            report.add_slide("A text", notes=notes)
+
+
+@pytest.mark.parametrize("content, valid", [("grid", True),
+                                            ("vertical", True),
+                                            ("horizontal", True),
+                                            ([0, 1, 2], True),
+                                            ([[0, 1], [2, 3]], True),
+                                            ("invalid", False),           # invalid string
+                                            ([[0, 1, 2], [3, 4]], False)  # inconsistent number of columns
+                                            ])
+def test_content_layout(content, valid):
+    """ Test that content layout is correctly validated """
+
+    report = PowerPointReport()
+
+    if valid:
+        report.add_slide("A text", content_layout=content)
+    else:
+        if isinstance(content, str):
+            with pytest.raises(ValueError, match="Unknown layout string:"):
+                report.add_slide("A text", content_layout=content)
+        else:
+            with pytest.raises(ValueError):
+                report.add_slide("A text", content_layout=content)
+
+
+@pytest.mark.parametrize("content", ["examples/content/fish_description.txt",
+                                     "examples/content/fish_description.md",
+                                     "examples/content/cat.jpg",
+                                     "examples/content/chips.pdf"])
+def test_content_fill(content):
+    """ Test that filling of slides with different types of content does not throw an error """
+
+    report = PowerPointReport(verbosity=2)
+    report.add_slide(content=content)
+
+    assert len(report._slides) == 1  # assert that a slide was added
+
+
+def test_pdf_output(caplog):
+    """ Test that pdf output works """
+
+    report = PowerPointReport()
+    report.add_slide("A text")
+    report.save("test.pptx", pdf=True)
+
+    if caplog.text != "":  # if libreoffice is installed, caplog will be empty
+        assert "Option 'pdf' is set to True, but LibreOffice could not be found on path." in caplog.text
+
+
 @pytest.mark.parametrize("expand", [True, False])
 def test_get_config(expand):
     """ Test that get_config returns the correct config """
@@ -83,3 +225,60 @@ def test_get_config(expand):
         assert len(config["slides"][0]["content"]) == 3
     else:
         assert isinstance(config["slides"][0]["content"], str)  # not expanded
+
+
+@pytest.mark.parametrize("pdf_pages, expected", [("all", ValueError),
+                                                 ([1, 2], ValueError),
+                                                 (1, None)])
+def test_pdf_pages_grouped(pdf_pages, expected):
+
+    report = PowerPointReport()
+
+    if type(expected).__name__ == "type":
+        with pytest.raises(expected):
+            report.add_slide(grouped_content=[content_dir + "pdfs/multidogs_([0-9]).pdf"], pdf_pages=pdf_pages)
+    else:
+        report.add_slide(grouped_content=[content_dir + "pdfs/multidogs_([0-9]).pdf"], pdf_pages=pdf_pages)  # no error
+        assert len(report._slides[0]._boxes) == 1  # only one element in the slide
+
+
+@pytest.mark.parametrize("pdf_pages", ["all", 2, [1, 3], [2, 3, 3]])
+def test_pdf_pages_pass(pdf_pages):
+
+    report = PowerPointReport()
+    tmp_files = report._convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
+    for tmp_file in tmp_files:
+        os.remove(tmp_file)
+
+
+@pytest.mark.parametrize("pdf_pages", [None, "h", -1, 0, 4])
+def test_index_pdf_pages_error(pdf_pages):
+
+    report = PowerPointReport()
+
+    if isinstance(pdf_pages, str):
+        with pytest.raises(ValueError):
+            report._convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
+    else:
+        with pytest.raises(IndexError):
+            report._convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
+
+
+@pytest.mark.parametrize("missing_file", ["raise", "empty", "skip", "invalid"])
+def test_missing_file(caplog, missing_file):
+    """ Test that a missing file raises an error or just warning """
+
+    report = PowerPointReport(verbosity=1)
+
+    if missing_file == "raise":
+        with pytest.raises(FileNotFoundError):
+            report.add_slide("examples/content/*.txtt", missing_file=missing_file)  # no files found with this extension
+
+    elif missing_file == "invalid":
+        with pytest.raises(ValueError):
+            report.add_slide("examples/content/*.txtt", missing_file=missing_file)
+
+    else:
+        report.add_slide("examples/content/*.txtt", missing_file=missing_file)
+
+        assert "No files could be found for pattern" in caplog.text

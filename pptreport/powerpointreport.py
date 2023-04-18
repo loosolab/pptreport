@@ -1,12 +1,13 @@
 import os
 import glob
-import inspect
 import pprint
 import json
 import re
 import subprocess
 import logging
 import sys
+import tempfile
+import fitz
 from natsort import natsorted
 
 # Pptx modules
@@ -20,73 +21,7 @@ from pptreport.slide import Slide
 ###############################################################################
 
 
-def flatten_list(lst):
-    """ Flatten a list containing both lists and non-lists """
-
-    flat = []
-    for element in lst:
-        if isinstance(element, list):
-            flat.extend(element)
-        else:
-            flat.append(element)
-
-    return flat
-
-
-def get_default_args(func):
-    signature = inspect.signature(func)
-    defaults = {k: v.default for k, v in signature.parameters.items() if v.default is not inspect.Parameter.empty}
-
-    return defaults
-
-
-def glob_files(lst):
-    """ Glob files in a list of strings which might contain "*". If no files are found for glob, raise an error. """
-
-    if isinstance(lst, str):
-        lst = [lst]
-
-    content = []  # flattened list of files
-    files = []  # names of files in the list
-    for element in lst:
-        if "*" in element:
-            globbed = glob.glob(element)
-            if len(globbed) > 0:
-                for file in globbed:
-                    files.append(file)
-                    content.append(file)
-            else:
-                raise ValueError(f"No files could be found for pattern: '{element}'")
-        else:
-            content.append(element)
-
-    # Get the locations of files in the list
-    file_locations = []
-    for i, string in enumerate(content):
-        if string in files:
-            file_locations.append(i)
-
-    # Sort files using natural sorting
-    file_list = [content[i] for i in file_locations]
-    file_list = natsorted(file_list)
-
-    # Return files to content in the correct order
-    for idx, string in zip(file_locations, file_list):
-        content[idx] = string
-
-    return content
-
-
-def get_files_in_dir(directory):
-    """ Get all files in the given directory including the path prefix """
-
-    files = os.listdir(directory)
-    files = [os.path.join(directory, file) for file in files]
-
-    return files
-
-
-def fill_dict(d1, d2):
+def _fill_dict(d1, d2):
     """ Fill the keys of d1 with the values of d2 if they are not already present in d1.
 
     Returns
@@ -100,7 +35,7 @@ def fill_dict(d1, d2):
             d1[key] = value
 
 
-def replace_quotes(string):
+def _replace_quotes(string):
     """ Replace single quotes with double quotes in a string (such as from the pprint utility to make a valid json file) """
 
     in_string = False
@@ -115,11 +50,59 @@ def replace_quotes(string):
     return string
 
 
+def _convert_to_bool(value):
+    """ Convert a value to a boolean type. """
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        if value.lower() in ["true", "1", "t", "y", "yes"]:
+            return True
+        elif value.lower() in ["false", "0", "f", "n", "no"]:
+            return False
+        else:
+            raise ValueError(f"Could not convert string '{value}' to a boolean value.")
+
+    else:
+        try:
+            converted = bool(value)  # can convert 1 to True and 0 to False
+            return converted
+        except Exception:
+            raise ValueError(f"Could not convert '{value}' to a boolean value.")
+
+
 ###############################################################################
 # -------------------- Class for building presentation ---------------------- #
 ###############################################################################
 
 class PowerPointReport():
+    """ Class for building a PowerPoint presentation """
+
+    _default_slide_parameters = {
+        "title": None,
+        "slide_layout": 1,
+        "content_layout": "grid",
+        "content_alignment": "center",
+        "outer_margin": 2,
+        "inner_margin": 1,
+        "left_margin": None,
+        "right_margin": None,
+        "top_margin": None,
+        "bottom_margin": None,
+        "n_columns": 2,
+        "width_ratios": None,
+        "height_ratios": None,
+        "notes": None,
+        "split": False,
+        "show_filename": False,
+        "filename_alignment": "center",
+        "fill_by": "row",
+        "remove_placeholders": False,
+        "fontsize": None,
+        "pdf_pages": "all",
+        "missing_file": "raise"
+    }
 
     def __init__(self, template=None, size="standard", verbosity=0):
         """ Initialize a presentation object using an existing presentation (template) or from scratch (default) """
@@ -129,42 +112,19 @@ class PowerPointReport():
             self.size = size
 
         self.global_parameters = None
-        self.setup_logger(verbosity)
+        self._setup_logger(verbosity)
 
         self.logger.info("Initializing presentation")
         self._initialize_presentation()
 
-        # Default slide parameters
-        self._default_slide_parameters = {
-            "title": None,
-            "slide_layout": 1,
-            "content_layout": "grid",
-            "content_alignment": "center",
-            "outer_margin": 2,
-            "inner_margin": 1,
-            "left_margin": None,
-            "right_margin": None,
-            "top_margin": None,
-            "bottom_margin": None,
-            "n_columns": 2,
-            "width_ratios": None,
-            "height_ratios": None,
-            "notes": None,
-            "split": False,
-            "show_filename": False,
-            "filename_alignment": "center",
-            "fill_by": "row",
-            "remove_placeholders": False,
-        }
-
-    def setup_logger(self, verbosity=1):
+    def _setup_logger(self, verbosity=1):
         """
         Setup a logger for the class.
 
         Parameters
         ----------
         verbosity : int, default 1
-            The verbosity of the logger. 0: ERROR, 1: INFO, 2: DEBUG
+            The verbosity of the logger. 0: ERROR and WARNINGS, 1: INFO, 2: DEBUG
 
         Returns
         -------
@@ -232,12 +192,25 @@ class PowerPointReport():
             else:
                 self._default_slide_parameters[k] = v
 
+            if k == "outer_margin":
+                self._default_slide_parameters["left_margin"] = v
+                self._default_slide_parameters["right_margin"] = v
+                self._default_slide_parameters["top_margin"] = v
+                self._default_slide_parameters["bottom_margin"] = v
+
         # Add to internal config dict
         self._config_dict["global_parameters"] = parameters
 
-    def add_to_config(self, parameters):
-        """ Add the slide parameters to the config file """
+    def _add_to_config(self, parameters):
+        """ Add the slide parameters to the config file.
 
+        Parameters
+        ----------
+        parameters : dict
+            The parameters for the slide.
+        """
+
+        parameters = parameters.copy()  # ensure that later changes in parameters are not reflected in the config dict
         if "slides" not in self._config_dict:
             self._config_dict["slides"] = []
 
@@ -256,7 +229,7 @@ class PowerPointReport():
         if isinstance(size, tuple):
             if len(size) != 2:
                 raise ValueError("Size tuple must be of length 2.")
-
+            size = [float(s) for s in size]  # convert eventual strings to floats
             h, w = Cm(size[0]), Cm(size[1])
 
         elif size == "standard":
@@ -281,6 +254,77 @@ class PowerPointReport():
     # ------------- Functions for adding slides ------------ #
     # ------------------------------------------------------ #
 
+    def _validate_parameters(self, parameters):
+        """ Check the format of the input parameters for the slide and return an updated dictionary. """
+
+        # Establish if content or grouped_content was given
+        if "content" in parameters and "grouped_content" in parameters:
+            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
+
+        # If split is given, content should be given
+        if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
+            raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
+
+        # If grouped_content is given, it should be a list
+        if "grouped_content" in parameters:
+            if not isinstance(parameters["grouped_content"], list):
+                raise TypeError("Invalid input. 'grouped_content' must be a list.")
+
+        # Set outer margin -> left/right/top/bottom
+        orig_parameters = parameters.copy()
+        for k in list(parameters.keys()):
+            v = orig_parameters[k]
+
+            if k == "outer_margin":
+                parameters["left_margin"] = v
+                parameters["right_margin"] = v
+                parameters["top_margin"] = v
+                parameters["bottom_margin"] = v
+            else:
+                parameters[k] = v  # overwrite previously set top/bottom/left/right margins if they are explicitly given
+
+        # Format "n_columns" to int
+        if "n_columns" in parameters:
+            try:
+                parameters["n_columns"] = int(parameters["n_columns"])
+            except ValueError:
+                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
+
+        # Format "split" to int or bool
+        if "split" in parameters:
+            try:  # try to convert to int first, e.g. if input is "2"
+                parameters["split"] = int(parameters["split"])
+            except Exception:  # if not possible, convert to bool
+                parameters["split"] = _convert_to_bool(parameters["split"])
+
+        # Format other purely boolean parameters to bool
+        bool_parameters = ["remove_placeholders"]
+        for param in bool_parameters:
+            if param in parameters:
+                parameters[param] = _convert_to_bool(parameters[param])
+
+        # Format show_filename
+        if "show_filename" in parameters:
+            value = parameters["show_filename"]
+            try:
+                parameters["show_filename"] = _convert_to_bool(value)
+            except ValueError as e:  # if the value is not a bool, it should be a string
+                if isinstance(value, str):
+                    valid = ["filename", "filename_ext", "filepath", "filepath_ext", "path"]
+                    if value not in valid:
+                        raise ValueError(f"Invalid parameter for 'show_filename'. The given value is: '{value}'. Please use one of the following: {valid}")
+                else:
+                    raise e  # raise the original error
+
+        # Validate missing_file
+        if "missing_file" in parameters:
+            if not isinstance(parameters["missing_file"], str):
+                raise TypeError("Invalid input for 'missing_file' - must be either 'raise', 'empty' or 'skip'")
+            else:
+                parameters["missing_file"] = parameters["missing_file"].lower()
+                if parameters["missing_file"] not in ["raise", "empty", "skip"]:
+                    raise ValueError(f"Invalid input '{parameters['missing_file']}' for 'missing_file'. Must be either 'raise', 'empty' or 'skip'.")
+
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
         Add a title slide to the presentation.
@@ -296,7 +340,7 @@ class PowerPointReport():
         """
 
         self.add_slide(title=title, slide_layout=layout)
-        slide = self._slides[-1]
+        slide = self._slides[-1]._slide  # pptx slide object
 
         # Fill placeholders
         if subtitle is not None:
@@ -305,26 +349,7 @@ class PowerPointReport():
 
     def add_slide(self,
                   content=None,
-                  grouped_content=None,
-                  title=None,
-                  slide_layout=None,
-                  content_layout=None,
-                  content_alignment=None,
-                  outer_margin=None,
-                  inner_margin=None,
-                  left_margin=None,
-                  right_margin=None,
-                  top_margin=None,
-                  bottom_margin=None,
-                  n_columns=None,
-                  width_ratios=None,
-                  height_ratios=None,
-                  notes=None,
-                  split=None,
-                  show_filename=None,
-                  filename_alignment=None,
-                  fill_by=None,
-                  remove_placeholders=None,
+                  **kwargs   # arguments given as a dictionary; ensures control over the order of the arguments
                   ):
         """
         Add a slide to the presentation.
@@ -362,8 +387,14 @@ class PowerPointReport():
             Notes for the slide. Can be either a path to a text file or a string.
         split : bool or int, default False
             Split the content into multiple slides. If True, the content will be split into one-slide-per-element. If an integer, the content will be split into slides with that many elements per slide.
-        show_filename : bool, default False
-            Filenames for images. If True, the filename of the image will be displayed above the image.
+        show_filename : bool or str, default False
+            Show filenames above images. The style of filename displayed depends on the value given:
+            - True or "filename": the filename without path and extension (e.g. "image")
+            - "filename_ext": the filename without path but with extension (e.g. "image.png")
+            - "filepath": the full path of the image (e.g. "/home/user/image")
+            - "filepath_ext": the full path of the image with extension (e.g. "/home/user/image.png")
+            - "path": the path of the image without filename (e.g. "/home/user")
+            - False: no filename is shown (default)
         filename_alignment : str, default "center"
             Horizontal alignment of the filename. Can be "left", "right" and "center".
             The default is "center", which will align the content centered horizontally.
@@ -371,62 +402,82 @@ class PowerPointReport():
             If slide_layout is grid or custom, choose to fill the grid row-by-row or column-by-column. 'fill_by' can be "row" or "column".
         remove_placeholders : str, default False
             Whether to remove empty placeholders from the slide, e.g. if title is not given. Default is False; to keep all placeholders. If True, empty placeholders will be removed.
+        fontsize : float, default None
+            Fontsize of text content. If None, the fontsize is automatically determined to fit the text in the textbox.
+        pdf_pages : int, list of int or "all", default "all"
+            Pages to be included from a multipage pdf. e.g. 1 (will include page 1), [1,3] will include pages 1 and 3. "all" includes all available pages.
+        missing_file : str, default "raise"
+            What to do if no files were found from a content pattern, e.g. "figure*.txt". Can be either "raise", "empty" or "skip".
+            - If "raise", a FileNotFoundError will be raised.
+            - If "empty", an empty content box will be added for the content pattern and 'add_slide' will continue without error.
+            - If "skip", this content pattern will be skipped (no box added).
         """
 
-        # Get input parameters
-        parameters = locals()
+        self.logger.debug("Started adding slide")
+
+        # Get input parameters;
+        parameters = {}
+        parameters["content"] = content
+        parameters.update(kwargs)
         parameters = {k: v for k, v in parameters.items() if v is not None}
-        parameters.pop("self")
-        parameters = self._check_add_slide_input(parameters)
+        self._add_to_config(parameters)
         self.logger.debug(f"Input parameters: {parameters}")
 
-        # If input was None, replace with default parameters from upper presentation
-        fill_dict(parameters, self._default_slide_parameters)
-        self.add_to_config(parameters)
-        self.logger.debug("Final slide parameters: {}".format(parameters))
+        # Validate parameters and expand outer_margin
+        self._validate_parameters(parameters)  # changes parameters in place
 
-        # Check validity and format parameters before creating slides
-        parameters = Slide.format_parameters(parameters)
+        # If input was None, replace with default parameters from upper presentation
+        _fill_dict(parameters, self._default_slide_parameters)
+        self.logger.debug("Final slide parameters: {}".format(parameters))
 
         # Add slides dependent on content type
         if "grouped_content" in parameters:
 
             content_per_group = self._get_paired_content(parameters["grouped_content"])
 
+            tmp_files = []
             # Create one slide per group
             for group, content in content_per_group.items():
+
+                # Save original filenames / content
+                filenames = content[:]
+
+                # Convert pdf to png files
+                for idx, element in enumerate(content):
+                    if element is not None:  # single files may be missing for groups
+                        if element.endswith(".pdf"):
+                            img_files = self._convert_pdf(element, parameters["pdf_pages"])
+
+                            if len(img_files) > 1:
+                                raise ValueError(f"Multiple pages in pdf is not supported for grouped content. Found {len(img_files)} in {content}, as pdf_pages is set to '{parameters['pdf_pages']}'. "
+                                                 "Please adjust pdf_pages to only include one page, e.g. pdf_pages=1.")
+                            content[idx] = img_files[0]
+                            tmp_files.append(content[idx])
+
                 slide = self._setup_slide(parameters)
                 slide.title = f"Group: {group}" if slide.title is None else slide.title
                 slide.content = content
+                slide._filenames = filenames  # original filenames per content element
                 slide._fill_slide()
 
         else:
-
-            content = self._get_content(parameters)
+            content, filenames, tmp_files = self._get_content(parameters)
 
             # Create slide(s)
-            for slide_content in content:
+            for i, slide_content in enumerate(content):
 
                 # Setup an empty slide
                 slide = self._setup_slide(parameters)
                 slide.content = slide_content
+                slide._filenames = filenames[i]  # original filenames per content element
                 slide._fill_slide()  # Fill slide with content
 
-    def _check_add_slide_input(self, parameters):
-        """ Check the format of the input parameters for the slide and return an updated dictionary. """
+        # clean tmp files after adding content to slide(s)
+        for tmp_file in tmp_files:
+            os.remove(tmp_file)
 
-        # Establish if content or grouped_content was given
-        if "content" in parameters and "grouped_content" in parameters:
-            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
-
-        # Check format of content
-        # if "content" in parameters:
-
-        # If split is given, content should be given
-        if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
-            raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
-
-        return parameters
+        self.logger.debug("Finished adding slide")
+        self.logger.debug("-" * 60)  # separator between slide logging
 
     def _setup_slide(self, parameters):
         """ Initialize an empty slide with a given layout. """
@@ -435,24 +486,9 @@ class PowerPointReport():
         n_slides = len(self._slides)
         self.logger.info("Adding slide {}".format(n_slides + 1))
 
-        # Get layout object from presentation
-        slide_layout = parameters.get("slide_layout", 0)
-        if isinstance(slide_layout, int):
-            try:
-                layout_obj = self._prs.slide_layouts[slide_layout]
-            except IndexError:
-                n_layouts = len(self._prs.slide_layouts)
-                raise IndexError(f"Layout index {slide_layout} not found in slide master. The number of slide layouts is {n_layouts} (the maximum index is {n_layouts-1})")
-
-        elif isinstance(slide_layout, str):
-            try:
-                layout_obj = self._prs.slide_layouts.get_by_name(slide_layout)
-            except KeyError:
-                raise KeyError(f"Layout named '{slide_layout}' not found in slide master.")
-        else:
-            raise TypeError("Layout should be an integer or a string.")
-
         # Add slide to python-pptx presentation
+        slide_layout = parameters.get("slide_layout", 0)
+        layout_obj = self._get_slide_layout(slide_layout)
         slide_obj = self._prs.slides.add_slide(layout_obj)
 
         # Add slide to list of slides in internal object
@@ -468,29 +504,250 @@ class PowerPointReport():
 
         return slide
 
+    def _get_slide_layout(self, slide_layout):
+        """ Get the slide layout object from a given layout. """
+
+        if isinstance(slide_layout, int):
+            try:
+                layout_obj = self._prs.slide_layouts[slide_layout]
+            except IndexError:
+                n_layouts = len(self._prs.slide_layouts)
+                raise IndexError(f"Layout index {slide_layout} not found in slide master. The number of slide layouts is {n_layouts} (the maximum index is {n_layouts-1})")
+
+        elif isinstance(slide_layout, str):
+
+            layout_obj = self._prs.slide_layouts.get_by_name(slide_layout)
+            if layout_obj is None:
+                raise KeyError(f"Layout named '{slide_layout}' not found in slide master.")
+
+        else:
+            raise TypeError("Layout should be an integer or a string.")
+
+        return layout_obj
+
+    def _convert_pdf(self, pdf, pdf_pages, dpi=300):
+        """ Convert a pdf file to a png file(s).
+
+        Parameters
+        ----------
+        pdf : str
+            pdf file to convert
+        pdf_pages: str, int
+            pages to include if pdf is a multipage pdf.
+            e.g. [1,2] gives firt two pages, all gives all pages
+        dpi : int, default 300
+            dpi of the output png file
+
+        Returns
+        -------
+        img_files: [str]
+            list containing converted filenames (in the tmp folder)
+        """
+
+        # open pdf with fitz module from pymupdf
+        doc = fitz.open(pdf)
+
+        # get page count
+        pages = doc.page_count
+        # span array over all available pages e.g. pages 3 transforms to [1,2,3]
+        pages = [i + 1 for i in range(pages)]
+
+        if pdf_pages is None:
+            raise IndexError(f"Index {pdf_pages} no valid Index.")
+
+        if isinstance(pdf_pages, str):
+            if pdf_pages.lower() == "all":
+                pdf_pages = pages
+            else:
+                raise ValueError(f"pdf_pages as string is expected to be 'all', but it is set to '{pdf_pages}'. Please set pdf_pages to 'all' or a list of integers.")
+        else:
+            if isinstance(pdf_pages, int):
+                pdf_pages = [pdf_pages]
+
+            # all index available? will also fail if index not int
+            index_mismatch = [page for page in pdf_pages if page not in pages]
+            if len(index_mismatch) != 0:
+                raise IndexError(f"Pages {index_mismatch} not available for {pdf}")
+
+        img_files = []
+        for page_num in pdf_pages:
+            # Create temporary file
+            temp_name = next(tempfile._get_candidate_names()) + ".png"
+            temp_dir = tempfile.gettempdir()
+            temp_file = os.path.join(temp_dir, temp_name)
+            self.logger.debug(f"Converting pdf page number{page_num} to temporary png at: {temp_file}")
+
+            # Convert pdf to png
+            page = doc.load_page(page_num - 1)  # page 1 is load() with 0
+            pix = page.get_pixmap(dpi=dpi)
+            pix.save(temp_file)
+            img_files.append(temp_file)
+
+        return img_files
+
+    def _expand_files(self, lst, missing_file="raise"):
+        """ Expand list of files by unix globbing or regex.
+
+        Parameters
+        ----------
+        lst : [str]
+            list of strings which might (or might not) contain "*" or regex pattern.
+        missing_file : str, default "raise"
+            What to do if no files are found for a glob pattern. I
+            - If "raise", a FileNotFoundError will be raised.
+            - If "empty", None will be added to the content list.
+            - If "skip", this content pattern will be skipped completely.
+
+        Returns
+        -------
+        content : [str]
+            list of files/content
+        """
+
+        if isinstance(lst, str):
+            lst = [lst]
+
+        content = []  # list of files/content
+        for element in lst:
+
+            files_found = []   # names of files found for this element
+
+            # If the number of words in element is 1, it could be a file
+            if element is not None and len(element.split()) == 1:
+
+                element = element.rstrip().lstrip()  # remove trailing and leading spaces to avoid problems with globbing
+
+                # Try to glob files with unix globbing
+                if element is not None:
+                    globbed = glob.glob(element)
+                    files_found.extend(globbed)
+
+                # If no files were found by globbing, try to find files by regex
+                if len(files_found) == 0:
+                    globbed = self._glob_regex(element)
+                    files_found.extend(globbed)
+
+                # Add files to content list if found
+                if len(files_found) == 0 and "*" in element:
+
+                    if missing_file == "raise":
+                        raise FileNotFoundError(f"No files could be found for pattern: '{element}'. Adjust pattern or set missing_file='empty'/'skip' to ignore the missing file.")
+                    elif missing_file == "empty":
+                        self.logger.warning(f"No files could be found for pattern: '{element}'. Adding empty box.")
+                        content.append(None)
+                    elif missing_file == "skip":
+                        self.logger.warning(f"No files could be found for pattern: '{element}'. Skipping.")
+                    else:
+                        raise ValueError(f"Unknown value for 'missing_file': '{missing_file}'")
+
+                elif len(files_found) > 0:
+                    content.append(files_found)
+
+                else:  # no files were found; content is treated as text
+                    content.append(element)
+
+            else:  # spaces in text; content is treated as text
+                content.append(element)
+
+        # Get the sorted list of files / content
+        content_sorted = []  # flattened list of files/content
+        for element in content:
+            if isinstance(element, list):
+                sorted_lst = natsorted(element)
+                content_sorted.extend(sorted_lst)
+            else:
+                content_sorted.append(element)
+
+        return content_sorted
+
     def _get_content(self, parameters):
         """ Get slide content based on input parameters. """
 
         # Establish content
         content = parameters.get("content", [])
-        if isinstance(content, str):
+        if not isinstance(content, list):
             content = [content]
 
         # Expand content files
-        content = glob_files(content)
+        content = self._expand_files(content, missing_file=parameters["missing_file"])
+        self.logger.debug(f"Expanded content: {content}")
+
+        # Replace multipage pdfs if present
+        content_converted = []  # don't alter original list
+        filenames = []
+        tmp_files = []
+        for element in content:
+            if isinstance(element, str) and element.endswith(".pdf"):  # avoid None or list type and only replace pdfs
+                img_files = self._convert_pdf(element, parameters.get("pdf_pages", "all"))
+
+                content_converted += img_files
+                filenames += [element] * len(img_files)  # replace filename with pdf name for each image
+                tmp_files += img_files
+
+                self.logger.debug(f"Replaced: {element} with {img_files}.")
+
+            else:
+                filenames += [element]
+                content_converted += [element]
+
+        content = content_converted
 
         # If split is false, content should be contained in one slide
         if parameters["split"] is False:
             content = [content]
+            filenames = [filenames]
         else:
             if len(content) == 0:
                 raise ValueError("Split is True, but 'content' is empty.")
             else:
-                content = glob_files(content)
                 if isinstance(parameters["split"], int):
                     content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
+                    filenames = [filenames[i:i + parameters["split"]] for i in range(0, len(filenames), parameters["split"])]
 
-        return content
+        return content, filenames, tmp_files
+
+    def _glob_regex(self, pattern):
+        """ Find all files in a directory that match a regex.
+
+        Parameters
+        ----------
+        pattern : str
+            Regex pattern to match files against.
+
+        Returns
+        -------
+        matched_files : list of str
+            List of files that match the regex pattern.
+        """
+
+        # Remove ( and ) from regex as they are only used to group regex later
+        pattern_clean = re.sub(r'(?<!\\)[\(\)]', '', pattern)
+        self.logger.debug(f"Finding files for possible regex pattern: {pattern_clean}")
+
+        # Find highest existing directory (as some directories might be regex)
+        directory = os.path.dirname(pattern_clean)
+        while not os.path.exists(directory):
+            directory = os.path.dirname(directory)
+            if directory == "":
+                break  # reached root directory
+
+        # Prepare regex for file search
+        pattern = re.sub(r'(?<!\\)/', r'\\/', pattern)  # Automatically escape / in regex (if not already escaped)
+        try:
+            pattern_compiled = re.compile(pattern)
+        except re.error:
+            raise ValueError(f"Invalid regex: {pattern}")
+
+        # Find all files that match the regex
+        search_glob = os.path.join(directory, "**")
+        matched_files = []
+        for file in glob.iglob(search_glob, recursive=True):
+            if pattern_compiled.match(file):
+                matched_files.append(file)
+
+        self.logger.debug(f"Found files: {matched_files}")
+
+        return matched_files
 
     def _get_paired_content(self, raw_content):
         """ Get content per group from a list of regex patterns.
@@ -511,23 +768,12 @@ class PowerPointReport():
         for i, pattern in enumerate(raw_content):
             group_content[i] = {}
 
-            self.logger.debug(f"Finding files for pattern: {pattern}")
+            files = self._glob_regex(pattern)
 
-            # Establish folder and all files in it
-            dirname = os.path.dirname(pattern)
-            dirname = "." if dirname == "" else dirname
-            files = get_files_in_dir(dirname)
-
-            # Find all files that match the regex
-            try:
-                pattern_compiled = re.compile(pattern)
-            except re.error:
-                raise ValueError(f"Invalid regex: {pattern}")
-
-            # Find all files that match the regex
+            # Find all groups within the regex
             for fil in files:
 
-                m = pattern_compiled.match(fil)
+                m = re.match(pattern, fil)
                 if m:  # if there was a match
 
                     groups = m.groups()
@@ -658,7 +904,7 @@ class PowerPointReport():
         # Get pretty printed config
         pp = pprint.PrettyPrinter(compact=True, sort_dicts=False, width=120)
         config_json = pp.pformat(config)
-        config_json = replace_quotes(config_json)
+        config_json = _replace_quotes(config_json)
         config_json = re.sub(r"\"\n\s+\"", "", config_json)  # strings are not allowed to split over multiple lines
         config_json = re.sub(r": None", ": null", config_json)  # Convert to null as None is not allowed in json
         config_json += "\n"  # end with newline
@@ -729,37 +975,48 @@ class PowerPointReport():
 
         self._prs.save(filename)
 
+        # Save presentation as pdf
+        if pdf:
+            self._save_pdf(filename)
+
         # Remove borders again
         if show_borders is True:
             self.remove_borders()  # Remove borders again
 
+    # not included in tests due to libreoffice dependency
+    def _save_pdf(self, filename):  # pragma: no cover
+        """
+        Save presentation as pdf.
+
+        Parameters
+        ----------
+        filename : str
+            Filename of the presentation in pptx format. The pdf will be saved with the same basename.
+        """
+        self.logger.info("Additionally saving presentation as .pdf")
+
+        # Check if libreoffice is installed
+        is_installed = False
+        try:
+            self.logger.debug("Checking if libreoffice is installed...")
+            result = subprocess.run(["libreoffice", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.logger.debug("Version of libreoffice: " + result.stdout.rstrip())
+            is_installed = True
+
+        except FileNotFoundError:
+            self.logger.error("Option 'pdf' is set to True, but LibreOffice could not be found on path. Please install LibreOffice to save presentations as pdf.")
+
         # Save presentation as pdf
-        if pdf:
+        if is_installed:
 
-            self.logger.info("Additionally saving presentation as .pdf")
+            outdir = os.path.dirname(filename)
+            outdir = "." if outdir == "" else outdir  # outdir cannot be empty
 
-            # Check if libreoffice is installed
-            is_installed = False
-            try:
-                self.logger.debug("Checking if libreoffice is installed...")
-                result = subprocess.run(["libreoffice", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                self.logger.debug("Version of libreoffice: " + result.stdout.rstrip())
-                is_installed = True
+            cmd = f"libreoffice --headless --invisible --convert-to pdf --outdir {outdir} {filename}"
+            self.logger.debug("Running command: " + cmd)
 
-            except FileNotFoundError:
-                self.logger.error("Option 'pdf' is set to True, but LibreOffice could not be found on path. Please install LibreOffice to save presentations as pdf.")
-
-            # Save presentation as pdf
-            if is_installed:
-
-                outdir = os.path.dirname(filename)
-                outdir = "." if outdir == "" else outdir  # outdir cannot be empty
-
-                cmd = f"libreoffice --headless --invisible --convert-to pdf --outdir {outdir} {filename}"
-                self.logger.debug("Running command: " + cmd)
-
-                process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                while process.poll() is None:
-                    line = process.stdout.readline().rstrip()
-                    if line != "":
-                        self.logger.debug("Command output: " + line)
+            process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            while process.poll() is None:
+                line = process.stdout.readline().rstrip()
+                if line != "":
+                    self.logger.debug("Command output: " + line)
