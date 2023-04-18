@@ -1,6 +1,5 @@
 import os
 import glob
-import inspect
 import pprint
 import json
 import re
@@ -22,14 +21,7 @@ from pptreport.slide import Slide
 ###############################################################################
 
 
-def get_default_args(func):
-    signature = inspect.signature(func)
-    defaults = {k: v.default for k, v in signature.parameters.items() if v.default is not inspect.Parameter.empty}
-
-    return defaults
-
-
-def fill_dict(d1, d2):
+def _fill_dict(d1, d2):
     """ Fill the keys of d1 with the values of d2 if they are not already present in d1.
 
     Returns
@@ -43,7 +35,7 @@ def fill_dict(d1, d2):
             d1[key] = value
 
 
-def replace_quotes(string):
+def _replace_quotes(string):
     """ Replace single quotes with double quotes in a string (such as from the pprint utility to make a valid json file) """
 
     in_string = False
@@ -58,7 +50,7 @@ def replace_quotes(string):
     return string
 
 
-def convert_to_bool(value):
+def _convert_to_bool(value):
     """ Convert a value to a boolean type. """
 
     if isinstance(value, bool):
@@ -120,12 +112,12 @@ class PowerPointReport():
             self.size = size
 
         self.global_parameters = None
-        self.setup_logger(verbosity)
+        self._setup_logger(verbosity)
 
         self.logger.info("Initializing presentation")
         self._initialize_presentation()
 
-    def setup_logger(self, verbosity=1):
+    def _setup_logger(self, verbosity=1):
         """
         Setup a logger for the class.
 
@@ -209,7 +201,7 @@ class PowerPointReport():
         # Add to internal config dict
         self._config_dict["global_parameters"] = parameters
 
-    def add_to_config(self, parameters):
+    def _add_to_config(self, parameters):
         """ Add the slide parameters to the config file.
 
         Parameters
@@ -303,19 +295,19 @@ class PowerPointReport():
             try:  # try to convert to int first, e.g. if input is "2"
                 parameters["split"] = int(parameters["split"])
             except Exception:  # if not possible, convert to bool
-                parameters["split"] = convert_to_bool(parameters["split"])
+                parameters["split"] = _convert_to_bool(parameters["split"])
 
         # Format other purely boolean parameters to bool
         bool_parameters = ["remove_placeholders"]
         for param in bool_parameters:
             if param in parameters:
-                parameters[param] = convert_to_bool(parameters[param])
+                parameters[param] = _convert_to_bool(parameters[param])
 
         # Format show_filename
         if "show_filename" in parameters:
             value = parameters["show_filename"]
             try:
-                parameters["show_filename"] = convert_to_bool(value)
+                parameters["show_filename"] = _convert_to_bool(value)
             except ValueError as e:  # if the value is not a bool, it should be a string
                 if isinstance(value, str):
                     valid = ["filename", "filename_ext", "filepath", "filepath_ext", "path"]
@@ -428,14 +420,14 @@ class PowerPointReport():
         parameters["content"] = content
         parameters.update(kwargs)
         parameters = {k: v for k, v in parameters.items() if v is not None}
-        self.add_to_config(parameters)
+        self._add_to_config(parameters)
         self.logger.debug(f"Input parameters: {parameters}")
 
         # Validate parameters and expand outer_margin
         self._validate_parameters(parameters)  # changes parameters in place
 
         # If input was None, replace with default parameters from upper presentation
-        fill_dict(parameters, self._default_slide_parameters)
+        _fill_dict(parameters, self._default_slide_parameters)
         self.logger.debug("Final slide parameters: {}".format(parameters))
 
         # Add slides dependent on content type
@@ -454,7 +446,7 @@ class PowerPointReport():
                 for idx, element in enumerate(content):
                     if element is not None:  # single files may be missing for groups
                         if element.endswith(".pdf"):
-                            img_files = self.convert_pdf(element, parameters["pdf_pages"])
+                            img_files = self._convert_pdf(element, parameters["pdf_pages"])
 
                             if len(img_files) > 1:
                                 raise ValueError(f"Multiple pages in pdf is not supported for grouped content. Found {len(img_files)} in {content}, as pdf_pages is set to '{parameters['pdf_pages']}'. "
@@ -533,7 +525,7 @@ class PowerPointReport():
 
         return layout_obj
 
-    def convert_pdf(self, pdf, pdf_pages, dpi=300):
+    def _convert_pdf(self, pdf, pdf_pages, dpi=300):
         """ Convert a pdf file to a png file(s).
 
         Parameters
@@ -686,7 +678,7 @@ class PowerPointReport():
         tmp_files = []
         for element in content:
             if isinstance(element, str) and element.endswith(".pdf"):  # avoid None or list type and only replace pdfs
-                img_files = self.convert_pdf(element, parameters.get("pdf_pages", "all"))
+                img_files = self._convert_pdf(element, parameters.get("pdf_pages", "all"))
 
                 content_converted += img_files
                 filenames += [element] * len(img_files)  # replace filename with pdf name for each image
@@ -912,7 +904,7 @@ class PowerPointReport():
         # Get pretty printed config
         pp = pprint.PrettyPrinter(compact=True, sort_dicts=False, width=120)
         config_json = pp.pformat(config)
-        config_json = replace_quotes(config_json)
+        config_json = _replace_quotes(config_json)
         config_json = re.sub(r"\"\n\s+\"", "", config_json)  # strings are not allowed to split over multiple lines
         config_json = re.sub(r": None", ": null", config_json)  # Convert to null as None is not allowed in json
         config_json += "\n"  # end with newline
