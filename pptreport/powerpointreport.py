@@ -678,7 +678,7 @@ class PowerPointReport():
         tmp_files = []
         for element in content:
             if isinstance(element, str) and element.endswith(".pdf"):  # avoid None or list type and only replace pdfs
-                img_files = self.convert_pdf(element, parameters.get("pdf_pages", "all"))
+                img_files = self._convert_pdf(element, parameters.get("pdf_pages", "all"))
 
                 content_converted += img_files
                 filenames += [element] * len(img_files)  # replace filename with pdf name for each image
