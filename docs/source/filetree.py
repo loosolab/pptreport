@@ -14,7 +14,7 @@ def get_tree_string(directory):
     p = Path(directory)
 
     tree_string = first + p.name + "\n"
-    prefix = '    '  
+    prefix = '    '
     for line in tree(p, prefix):
         tree_string += line + "\n"
 

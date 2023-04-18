@@ -201,7 +201,7 @@ class PowerPointReport():
         # Add to internal config dict
         self._config_dict["global_parameters"] = parameters
 
-    def add_to_config(self, parameters):
+    def _add_to_config(self, parameters):
         """ Add the slide parameters to the config file.
 
         Parameters
@@ -420,7 +420,7 @@ class PowerPointReport():
         parameters["content"] = content
         parameters.update(kwargs)
         parameters = {k: v for k, v in parameters.items() if v is not None}
-        self.add_to_config(parameters)
+        self._add_to_config(parameters)
         self.logger.debug(f"Input parameters: {parameters}")
 
         # Validate parameters and expand outer_margin

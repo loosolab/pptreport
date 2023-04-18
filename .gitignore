@@ -4,12 +4,8 @@ __pycache__/
 *$py.class
 
 # Automatic files in docs
-docs/source/examples/*.png
-docs/source/examples/*.pdf
-docs/source/examples/*.pptx
-docs/source/examples/*.rst
-docs/source/examples/*.txt
-docs/source/examples/*.json
+docs/source/examples/*
+!docs/source/examples/*.py
 
 # C extensions
 *.so

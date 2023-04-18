@@ -14,7 +14,11 @@
 import os
 import sys
 
+cwd = os.getcwd()
+
+sys.path.insert(0, cwd)
 sys.path.insert(0, os.path.abspath('../..'))
+
 
 # -- Project information -----------------------------------------------------
 
@@ -26,8 +30,9 @@ author = 'Loosolab'
 # ----------------------------------------------------------------------------
 
 # Run all examples and build the .rst file with the output
-os.system("python build_examples.py")
 
+import build_examples
+build_examples.main()  # run function from build_examples.py
 
 # -- General configuration ---------------------------------------------------
 
@@ -55,8 +60,10 @@ templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 images_config = {
-    "default_image_width": "20%"
+    "default_image_width": "15%"
 }
+html_static_path = ['_static']
+html_css_files = ["thumbnails.css"]
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -65,8 +72,3 @@ images_config = {
 #
 # html_theme = 'alabaster'
 html_theme = 'sphinx_rtd_theme'
-
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
-#html_static_path = ['_static']
