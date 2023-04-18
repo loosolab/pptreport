@@ -98,6 +98,7 @@ pages:
     - apt-get update -qq && apt-get install -qq -y pandoc
     - pip install sphinx sphinx-rtd-theme sphinxcontrib-images
     - apt -y install libreoffice  # for creating pdf
+    - apt -y install zip
     - cd docs
     - make html
     - mv build/html/ ../public/
@@ -105,4 +106,4 @@ pages:
     paths:
       - public
   rules:
-    - if: $CI_COMMIT_BRANCH == "dev" # after accepted MR to dev
+    - if: $CI_COMMIT_BRANCH == "main" # after accepted MR to main
