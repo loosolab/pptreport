@@ -3,6 +3,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Automatic files in docs
+docs/source/examples/*.png
+docs/source/examples/*.pdf
+docs/source/examples/*.pptx
+docs/source/examples/*.rst
+docs/source/examples/*.txt
+docs/source/examples/*.json
+
 # C extensions
 *.so
 
