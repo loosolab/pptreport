@@ -401,6 +401,9 @@ class Box():
         text : str
             The text to be added to the box.
         """
+
+        self.logger.debug(f"Adding markdown formatted text to box '{self.box_index}'.")
+
         # mistune is only needed for md, only import if needed
         import mistune
 
@@ -408,8 +411,8 @@ class Box():
         markdown = mistune.create_markdown(renderer="ast")
 
         # traverse the tree
-        for string in text.split("\n"):
-            for i, par in enumerate(markdown(string)):
+        for i, string in enumerate(text.split("\n")):
+            for par in markdown(string):
                 if par["type"] == "paragraph":
 
                     # Add newlines between paragraphs
@@ -461,7 +464,7 @@ class Box():
 
                 elif par["type"] == "newline":
                     run = p.add_run()
-                    run.text = "\n\n"  # newline for previous line + newline for new paragraph
+                    run.text = "\n"  # newline for new paragraph
 
                 elif par["type"] == "heading":
                     # implement heading (bold, bigger) ? Or add it only as plain txt
