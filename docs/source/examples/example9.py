@@ -1,6 +1,6 @@
 from pptreport import PowerPointReport
 
-report = PowerPointReport()
+report = PowerPointReport(template="content/template.pptx")
 
 report.add_title_slide(title="Advanced RegEx usage")
 report.add_slide(title="Globbing with *", content="*/*.png")

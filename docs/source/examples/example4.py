@@ -1,6 +1,6 @@
 from pptreport import PowerPointReport
 
-report = PowerPointReport()
+report = PowerPointReport(template="content/template.pptx")
 
 report.add_title_slide(title="Custom content layout")
 content_layout = [[0, 1, 2],

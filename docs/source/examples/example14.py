@@ -1,6 +1,6 @@
 from pptreport import PowerPointReport
 
-report = PowerPointReport()
+report = PowerPointReport(template="content/template.pptx")
 
 report.add_title_slide(title="Change fontsize")
 content_layout = [[0, 2],

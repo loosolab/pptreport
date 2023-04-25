@@ -1,7 +1,7 @@
 
 from pptreport import PowerPointReport
 
-report = PowerPointReport()
+report = PowerPointReport(template="content/template.pptx")
 
 report.add_title_slide(title="Different margins")
 report.add_slide(content=["content/*.jpg"],

@@ -1,6 +1,6 @@
 from pptreport import PowerPointReport
 
-report = PowerPointReport()
+report = PowerPointReport(template="content/template.pptx")
 
 report.add_title_slide(title="Order of content")
 report.add_slide(content=["First giraffe", "Second giraffe", "Third giraffe",

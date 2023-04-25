@@ -1,6 +1,6 @@
 from pptreport import PowerPointReport
 
-report = PowerPointReport()
+report = PowerPointReport(template="content/template.pptx")
 
 report.add_title_slide(title="How to deal with missing files")
 report.add_slide(["content/lion.jpg", "content/not_present*.jpg"],

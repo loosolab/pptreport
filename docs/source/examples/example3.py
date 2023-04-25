@@ -1,6 +1,6 @@
 from pptreport import PowerPointReport
 
-report = PowerPointReport()
+report = PowerPointReport(template="content/template.pptx")
 
 report.add_title_slide(title="vertical/horizontal content layout")
 report.add_slide(content=["content/lion.jpg", "Some text below the picture."],

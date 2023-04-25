@@ -1,6 +1,6 @@
 from pptreport import PowerPointReport
 
-report = PowerPointReport()
+report = PowerPointReport(template="content/template.pptx")
 
 report.add_title_slide(title="Example of markdown usage")
 report.add_slide(content=["content/*_fish*", "content/fish_description.md"],
