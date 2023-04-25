@@ -5,6 +5,6 @@ pptreport
    :maxdepth: 2
    :caption: Contents:
 
-   overwiev
+   overview
    examples/index
    API/index
