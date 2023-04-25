@@ -20,6 +20,17 @@ sys.path.insert(0, cwd)
 sys.path.insert(0, os.path.abspath('../..'))
 
 
+# -- Enable Markdown ---------------------------------------------------------
+
+from recommonmark.parser import CommonMarkParser
+
+source_parsers = {
+    '.md': CommonMarkParser,
+}
+
+source_suffix = ['.rst', '.md']
+
+
 # -- Project information -----------------------------------------------------
 
 project = 'pptreport'
