@@ -107,4 +107,4 @@ pages:
     paths:
       - public
   rules:
-    - if: $CI_COMMIT_BRANCH == "move_readme_to_docs" # after accepted MR to main
+    - if: $CI_COMMIT_BRANCH == "34-update-documentation" # after accepted MR to main
