@@ -20,17 +20,6 @@ sys.path.insert(0, cwd)
 sys.path.insert(0, os.path.abspath('../..'))
 
 
-# -- Enable Markdown ---------------------------------------------------------
-
-from recommonmark.parser import CommonMarkParser
-
-source_parsers = {
-    '.md': CommonMarkParser,
-}
-
-source_suffix = ['.rst', '.md']
-
-
 # -- Project information -----------------------------------------------------
 
 project = 'pptreport'
@@ -53,6 +42,7 @@ build_examples.main()  # run function from build_examples.py
 extensions = ['sphinxcontrib.images',
               'sphinx.ext.autodoc',
               'sphinx.ext.napoleon',
+              'myst_parser',
               # 'sphinx.ext.viewcode',
               # 'sphinx.ext.intersphinx',
               # "nbsphinx",
