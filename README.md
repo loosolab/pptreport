@@ -2,7 +2,7 @@
 [![coverage dev](https://gitlab.gwdg.de/loosolab/software/pptreport/badges/dev/coverage.svg?key_text=coverage+dev&key_width=100)](https://gitlab.gwdg.de/loosolab/software/pptreport/-/commits/dev)
 
 
-# Documentation
+# pptreport
 
 The documentation for pptreport can be accessed via the following link:
 
