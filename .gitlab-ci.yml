@@ -107,4 +107,5 @@ pages:
     paths:
       - public
   rules:
-    - if: $CI_COMMIT_BRANCH == "rework_examples" # after accepted MR to main
+    - if: $CI_COMMIT_BRANCH == "34-update-documentation" # after accepted MR to main
+
