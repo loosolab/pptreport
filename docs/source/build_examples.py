@@ -112,7 +112,7 @@ def main():
         rst_file.write("^^^^^^^^\n")
 
         # Write thumbnails for individual slides
-        slide_pngs = glob.glob(f"{example_name}*.png")
+        slide_pngs = glob.glob(f"{example_name}_*.png")
         slide_pngs = natsorted(slide_pngs)  # make sure slide 2 is before slide 10
         for png in slide_pngs:
 
