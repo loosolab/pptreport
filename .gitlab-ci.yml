@@ -97,6 +97,7 @@ pages:
   script:
     - apt-get update -qq && apt-get install -qq -y pandoc
     - pip install sphinx sphinx-rtd-theme sphinxcontrib-images
+    - pip install myst_parser
     - apt -y install libreoffice  # for creating pdf
     - apt -y install zip
     - cd docs
@@ -107,3 +108,4 @@ pages:
       - public
   rules:
     - if: $CI_COMMIT_BRANCH == "main" # after accepted MR to main
+

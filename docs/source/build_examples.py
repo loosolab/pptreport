@@ -4,11 +4,13 @@ import fitz
 from natsort import natsorted
 from filetree import get_tree_string
 import shutil
+import yaml
 
 hline = "--------------------\n\n"
 
 
 def main():
+
     # Set options
     dpi = 100
     content_dir = "../../examples/content"
@@ -32,6 +34,7 @@ def main():
 
     # Run all examples
     example_files = glob.glob("examples/*.py")
+    example_files = natsorted(example_files)  # make sure example 2 is before example 10
     print(f"Found examples: {example_files}")
 
     for example_file in example_files:
@@ -52,6 +55,8 @@ def main():
 
             outfile = pdf_file.replace(".pdf", f"_{page_num+1}.png")
             pix.save(outfile)
+
+    example_titles = yaml.safe_load(open("example_titles.yaml", "r"))
 
     ##################################################
     # Build the rst file
@@ -82,8 +87,12 @@ def main():
 
         # Write example name title
         rst_file.write(hline)
-        rst_file.write(f"Example {i+1}\n")
-        rst_file.write("-" * 20 + "\n\n")
+        title = [f"Example {i+1}"]
+        if example_name_base in example_titles:
+            title.append(example_titles[example_name_base])
+        title_str = ": ".join(title) + "\n"
+        rst_file.write(title_str)
+        rst_file.write("-" * len(title_str) + "\n\n")
 
         # Write input code
         rst_file.write("Input (script or json):\n")
@@ -104,7 +113,7 @@ def main():
         rst_file.write("^^^^^^^^\n")
 
         # Write thumbnails for individual slides
-        slide_pngs = glob.glob(f"{example_name}*.png")
+        slide_pngs = glob.glob(f"{example_name}_*.png")
         slide_pngs = natsorted(slide_pngs)  # make sure slide 2 is before slide 10
         for png in slide_pngs:
 
@@ -118,8 +127,13 @@ def main():
         # Add option to download pptx / pdf
         rst_file.write("\n\n")
         rst_file.write(f"| :download:`{example_name_base}.pptx <{example_name_base}.pptx>`\n")
-        rst_file.write(f"| :download:`{example_name_base}.pdf <{example_name_base}.pdf>`\n")
+        rst_file.write(f"| :download:`{example_name_base}.pdf <{example_name_base}.pdf>`\n\n")
 
+    rst_file.close()
 
-if __name__ == "__main__":
-    main()
+    ##################################################
+    # Clean up
+    ##################################################
+
+    # Remove copied content folder
+    shutil.rmtree("examples/content")
