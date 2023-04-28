@@ -10,6 +10,7 @@ hline = "--------------------\n\n"
 
 
 def main():
+
     # Set options
     dpi = 100
     content_dir = "../../examples/content"
@@ -126,8 +127,13 @@ def main():
         # Add option to download pptx / pdf
         rst_file.write("\n\n")
         rst_file.write(f"| :download:`{example_name_base}.pptx <{example_name_base}.pptx>`\n")
-        rst_file.write(f"| :download:`{example_name_base}.pdf <{example_name_base}.pdf>`\n")
+        rst_file.write(f"| :download:`{example_name_base}.pdf <{example_name_base}.pdf>`\n\n")
 
+    rst_file.close()
 
-if __name__ == "__main__":
-    main()
+    ##################################################
+    # Clean up
+    ##################################################
+
+    # Remove copied content folder
+    shutil.rmtree("examples/content")
