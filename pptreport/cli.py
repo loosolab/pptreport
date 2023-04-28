@@ -47,7 +47,3 @@ def main():
         sys.exit(1)
 
     report.logger.info("pptreport finished!")
-
-
-if __name__ == "__main__":
-    main()

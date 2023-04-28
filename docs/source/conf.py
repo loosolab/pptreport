@@ -42,6 +42,7 @@ build_examples.main()  # run function from build_examples.py
 extensions = ['sphinxcontrib.images',
               'sphinx.ext.autodoc',
               'sphinx.ext.napoleon',
+              'myst_parser',
               # 'sphinx.ext.viewcode',
               # 'sphinx.ext.intersphinx',
               # "nbsphinx",
