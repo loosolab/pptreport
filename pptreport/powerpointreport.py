@@ -337,6 +337,13 @@ class PowerPointReport():
                 else:
                     raise e  # raise the original error
 
+        # Validate fontsize
+        if "fontsize" in parameters:
+            try:
+                parameters["fontsize"] = float(parameters["fontsize"])
+            except ValueError:
+                raise ValueError(f"Could not convert 'fontsize' parameter to value. The given value is: '{parameters['fontsize']}'. Please use a float or integer.")
+
         # Validate missing_file
         if "missing_file" in parameters:
             if not isinstance(parameters["missing_file"], str):
