@@ -72,6 +72,27 @@ def _convert_to_bool(value):
             raise ValueError(f"Could not convert '{value}' to a boolean value.")
 
 
+def _looks_like_filename(string):
+    """ Check if a string looks like a filename.
+
+    Parameters
+    ----------
+    string : str
+        The string to check.
+
+    Returns
+    -------
+    bool
+        True if the string looks like a filename, False otherwise.
+    """
+
+    # Check if string is a 1-word string with a dot in it and an extension after the dot
+    if len(string.split()) == 1 and "." in string and string.rsplit(".", 1)[1]:
+        return True
+    else:
+        return False  # string does not look like a filename
+
+
 ###############################################################################
 # -------------------- Class for building presentation ---------------------- #
 ###############################################################################
@@ -319,11 +340,11 @@ class PowerPointReport():
         # Validate missing_file
         if "missing_file" in parameters:
             if not isinstance(parameters["missing_file"], str):
-                raise TypeError("Invalid input for 'missing_file' - must be either 'raise', 'empty' or 'skip'")
+                raise TypeError("Invalid input for 'missing_file' - must be either 'raise', 'empty', 'text', 'skip' or 'skip-slide'.")
             else:
                 parameters["missing_file"] = parameters["missing_file"].lower()
-                if parameters["missing_file"] not in ["raise", "empty", "skip"]:
-                    raise ValueError(f"Invalid input '{parameters['missing_file']}' for 'missing_file'. Must be either 'raise', 'empty' or 'skip'.")
+                if parameters["missing_file"] not in ["raise", "empty", "text", "skip", "skip-slide"]:
+                    raise ValueError(f"Invalid input '{parameters['missing_file']}' for 'missing_file'. Must be either 'raise', 'empty', 'text', 'skip' or 'skip-slide'.")
 
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
@@ -462,6 +483,10 @@ class PowerPointReport():
 
         else:
             content, filenames, tmp_files = self._get_content(parameters)
+
+            # skip full slide if no content was found and missing_file is set to "skip-slide"
+            if content == "skip-slide":
+                return  # return before creating slide
 
             # Create slide(s)
             for i, slide_content in enumerate(content):
@@ -627,16 +652,25 @@ class PowerPointReport():
                     globbed = self._glob_regex(element)
                     files_found.extend(globbed)
 
+                # Establish if the str looks like a filename (or if it is treated a text)
+                looks_like_filename = _looks_like_filename(element)
+
                 # Add files to content list if found
-                if len(files_found) == 0 and "*" in element:
+                if len(files_found) == 0 and looks_like_filename:  # no files were found, but it looks like a filename
 
                     if missing_file == "raise":
                         raise FileNotFoundError(f"No files could be found for pattern: '{element}'. Adjust pattern or set missing_file='empty'/'skip' to ignore the missing file.")
                     elif missing_file == "empty":
                         self.logger.warning(f"No files could be found for pattern: '{element}'. Adding empty box.")
                         content.append(None)
+                    elif missing_file == "text":
+                        self.logger.warning(f"No files could be found for pattern: '{element}'. Adding textbox with pattern.")
+                        content.append(element)
                     elif missing_file == "skip":
-                        self.logger.warning(f"No files could be found for pattern: '{element}'. Skipping.")
+                        self.logger.warning(f"No files could be found for pattern: '{element}'. Skipping this file on the slide.")
+                    elif missing_file == "skip-slide":
+                        self.logger.warning(f"No files could be found for pattern: '{element}'. Skipping slide.")
+                        return "skip-slide"
                     else:
                         raise ValueError(f"Unknown value for 'missing_file': '{missing_file}'")
 
@@ -671,6 +705,9 @@ class PowerPointReport():
         # Expand content files
         content = self._expand_files(content, missing_file=parameters["missing_file"])
         self.logger.debug(f"Expanded content: {content}")
+
+        if content == "skip-slide":
+            return "skip-slide", None, None
 
         # Replace multipage pdfs if present
         content_converted = []  # don't alter original list

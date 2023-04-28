@@ -264,21 +264,45 @@ def test_index_pdf_pages_error(pdf_pages):
             report._convert_pdf(content_dir + "pdfs/multidogs.pdf", pdf_pages)
 
 
-@pytest.mark.parametrize("missing_file", ["raise", "empty", "skip", "invalid"])
-def test_missing_file(caplog, missing_file):
+# even if missing_file == "raise", content that is clearly not a file should not raise an error
+def test_missing_file_content():
+
+    content = ["A string which is not a file. Should not raise an error."]
+    report = PowerPointReport()
+    report.add_slide(content=content, missing_file="raise")
+
+
+@pytest.mark.parametrize("missing_file", ["raise", "empty", "text", "skip", "skip-slide", "invalid"])
+def test_missing_file_option(caplog, missing_file):
     """ Test that a missing file raises an error or just warning """
 
     report = PowerPointReport(verbosity=1)
 
+    pattern = "examples/content/*.txtt"
+
     if missing_file == "raise":
         with pytest.raises(FileNotFoundError):
-            report.add_slide("examples/content/*.txtt", missing_file=missing_file)  # no files found with this extension
+            report.add_slide(pattern, missing_file=missing_file)  # no files found with this extension
 
     elif missing_file == "invalid":
         with pytest.raises(ValueError):
-            report.add_slide("examples/content/*.txtt", missing_file=missing_file)
+            report.add_slide(pattern, missing_file=missing_file)
 
     else:
-        report.add_slide("examples/content/*.txtt", missing_file=missing_file)
 
+        report.add_slide(pattern, missing_file=missing_file)
         assert "No files could be found for pattern" in caplog.text
+
+        if missing_file == "skip-slide":
+            assert len(report._slides) == 0  # no slides added
+
+        elif missing_file == "skip":
+            assert len(report._slides[0]._boxes) == 0  # slide added, but no boxes added
+
+        elif missing_file == "empty":
+            assert len(report._slides[0]._boxes) == 1  # one box added (empty)
+            assert report._slides[0]._boxes[0].content is None
+
+        elif missing_file == "text":
+            assert len(report._slides[0]._boxes) == 1  # one box added with string content
+            assert report._slides[0]._boxes[0].content == pattern
