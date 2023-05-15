@@ -316,7 +316,7 @@ class Slide():
         box.logger = self.logger  # share logger with box
 
         # Add specific parameters to box
-        keys = ["content_alignment", "show_filename", "filename_alignment", "fontsize"]
+        keys = ["content_alignment", "show_filename", "filename_alignment", "fontsize", "max_pixels"]
         parameters = {key: getattr(self, key) for key in keys}
         box.add_parameters(parameters)
 

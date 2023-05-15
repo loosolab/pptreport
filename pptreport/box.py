@@ -1,6 +1,8 @@
 import os
 import re
 import pkg_resources
+import tempfile
+import numpy as np
 
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
@@ -10,6 +12,7 @@ from pptx.text.layout import TextFitter
 
 # For reading pictures
 from PIL import Image
+Image.MAX_IMAGE_PIXELS = None  # disable DecompressionBombError
 
 
 def split_string(string, length):
@@ -238,12 +241,58 @@ class Box():
         """ Fill the box with an image. """
 
         # Find out the size of the image
+        filename, is_temp = self._resize_image(filename)
         self._adjust_image_size(filename)
         self._adjust_image_position()  # adjust image position to middle of box
 
         # Add image
         self.logger.debug("Adding image to slide from file: " + filename)
         self.picture = self.slide.shapes.add_picture(filename, self.content_left, self.content_top, self.content_width, self.content_height)
+
+        # Remove temporary file
+        if is_temp:
+            os.remove(filename)
+
+    def _resize_image(self, filename):
+        """ Resize the image if needed. Uses max_pixels to determine if image is too large.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the image file.
+
+        Returns
+        -------
+        tuple : (str, bool)
+            The filename of the resized (or original) image and a boolean indicating if the image was resized.
+        """
+
+        max_pixels = self.max_pixels
+
+        im = Image.open(filename)
+        im_width, im_height = im.size
+        image_pixels = im_width * im_height
+
+        # Resize image if it is too large
+        if image_pixels > max_pixels:
+
+            image_ratio = im_width / im_height
+            new_height = int(np.sqrt(max_pixels / image_ratio))   # height * height * (width / height) = max_pixels
+            new_width = int(new_height * image_ratio)
+            self.logger.warning(f"Image '{filename}' is larger than max_pixels={max_pixels} ({im_height}*{im_width}={image_pixels}). Adjust 'max_pixels' to skip resizing. Resizing to size {new_height}*{new_width}...")
+
+            im = im.resize((new_width, new_height), Image.ANTIALIAS)
+
+            # Create temporary file
+            temp_name = next(tempfile._get_candidate_names()) + ".png"
+            temp_dir = tempfile.gettempdir()
+            temp_file = os.path.join(temp_dir, temp_name)
+            im.save(temp_file, quality=100, subsampling=0)
+
+            return temp_file, True  # image was resized
+
+        else:
+            return filename, False
 
     def _adjust_image_size(self, filename):
         """

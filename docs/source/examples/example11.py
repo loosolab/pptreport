@@ -12,9 +12,17 @@ report.add_slide(["content/lion.jpg", "content/not_present*.jpg"],
 report.add_slide(["content/lion.jpg", "content/not_present*.jpg"],
                  title="With missing_file = 'skip'",
                  missing_file="skip")
-report.add_slide(["content/lion.jpg", "content/not_present*.jpg"],
-                 title="With missing_file = 'skip-slide'",
-                 missing_file="skip-slide")   # this slide will not be shown
+report.add_slide(["content/lion-not-present.jpg", "content/not_present*.jpg"],
+                 title="With missing_file = 'text' and empty_slide='keep' (default)",
+                 missing_file="text")
+report.add_slide(["content/lion-not-present.jpg", "content/not_present*.jpg"],
+                 title="With missing_file = 'text' and empty_slide='skip'",
+                 missing_file="text",
+                 empty_slide="skip")  # this slide will not be shown
+report.add_slide(["subheader 1", "subheader 2", "content/lion-not-present.jpg", "content/not_present*.jpg"],
+                 title="With missing_file = 'text' and empty_slide='skip'",
+                 missing_file="text",
+                 empty_slide="skip")  # this slide will also not be shown even if headers are present
 
 report.write_config("example11.json")
 report.save("example11.pptx", pdf=True)

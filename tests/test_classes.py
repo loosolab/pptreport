@@ -272,7 +272,7 @@ def test_missing_file_content():
     report.add_slide(content=content, missing_file="raise")
 
 
-@pytest.mark.parametrize("missing_file", ["raise", "empty", "text", "skip", "skip-slide", "invalid"])
+@pytest.mark.parametrize("missing_file", ["raise", "empty", "text", "skip", "invalid"])
 def test_missing_file_option(caplog, missing_file):
     """ Test that a missing file raises an error or just warning """
 
@@ -293,10 +293,7 @@ def test_missing_file_option(caplog, missing_file):
         report.add_slide(pattern, missing_file=missing_file)
         assert "No files could be found for pattern" in caplog.text
 
-        if missing_file == "skip-slide":
-            assert len(report._slides) == 0  # no slides added
-
-        elif missing_file == "skip":
+        if missing_file == "skip":
             assert len(report._slides[0]._boxes) == 0  # slide added, but no boxes added
 
         elif missing_file == "empty":
@@ -306,3 +303,17 @@ def test_missing_file_option(caplog, missing_file):
         elif missing_file == "text":
             assert len(report._slides[0]._boxes) == 1  # one box added with string content
             assert report._slides[0]._boxes[0].content == pattern
+
+
+@pytest.mark.parametrize("empty_slide", ["keep", "skip"])
+def test_empty_slide(empty_slide):
+
+    report = PowerPointReport(verbosity=1)
+
+    pattern = "examples/content/*.txtt"  # no files found with this extension
+    report.add_slide(pattern, missing_file="text", empty_slide=empty_slide)
+
+    if empty_slide == "keep":
+        assert len(report._slides) == 1
+    elif empty_slide == "skip":
+        assert len(report._slides) == 0  # no slides added because slide was empty
