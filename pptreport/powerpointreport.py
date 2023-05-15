@@ -122,7 +122,10 @@ class PowerPointReport():
         "remove_placeholders": False,
         "fontsize": None,
         "pdf_pages": "all",
-        "missing_file": "raise"
+        "missing_file": "raise",
+        "dpi": 300,
+        "max_pixels": 1e8,
+        "empty_slide": "keep"
     }
 
     def __init__(self, template=None, size="standard", verbosity=0):
@@ -304,12 +307,20 @@ class PowerPointReport():
             else:
                 parameters[k] = v  # overwrite previously set top/bottom/left/right margins if they are explicitly given
 
-        # Format "n_columns" to int
-        if "n_columns" in parameters:
-            try:
-                parameters["n_columns"] = int(parameters["n_columns"])
-            except ValueError:
-                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
+        # Format integer columns
+        int_params = ["n_columns", "max_pixels", "dpi"]
+        for param in int_params:
+            if param in parameters:
+                try:
+                    parameters[param] = int(parameters[param])
+                except ValueError:
+                    value = parameters[param]
+                    raise ValueError(f"Could not convert '{param}' parameter to int. The given value is: '{value}'. Please use an integer.")
+
+        # Format "empty_slide"
+        if "empty_slide" in parameters:
+            if parameters["empty_slide"] not in ["keep", "skip"]:
+                raise ValueError(f"Invalid input '{parameters['empty_slide']}' for 'empty_slide'. Must be either 'keep' or 'skip'.")
 
         # Format "split" to int or bool
         if "split" in parameters:
@@ -347,11 +358,11 @@ class PowerPointReport():
         # Validate missing_file
         if "missing_file" in parameters:
             if not isinstance(parameters["missing_file"], str):
-                raise TypeError("Invalid input for 'missing_file' - must be either 'raise', 'empty', 'text', 'skip' or 'skip-slide'.")
+                raise TypeError("Invalid input for 'missing_file' - must be either 'raise', 'empty', 'text' or 'skip'.")
             else:
                 parameters["missing_file"] = parameters["missing_file"].lower()
-                if parameters["missing_file"] not in ["raise", "empty", "text", "skip", "skip-slide"]:
-                    raise ValueError(f"Invalid input '{parameters['missing_file']}' for 'missing_file'. Must be either 'raise', 'empty', 'text', 'skip' or 'skip-slide'.")
+                if parameters["missing_file"] not in ["raise", "empty", "text", "skip"]:
+                    raise ValueError(f"Invalid input '{parameters['missing_file']}' for 'missing_file'. Must be either 'raise', 'empty', 'text' or 'skip'.")
 
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
@@ -436,9 +447,18 @@ class PowerPointReport():
             Pages to be included from a multipage pdf. e.g. 1 (will include page 1), [1,3] will include pages 1 and 3. "all" includes all available pages.
         missing_file : str, default "raise"
             What to do if no files were found from a content pattern, e.g. "figure*.txt". Can be either "raise", "empty" or "skip".
-            - If "raise", a FileNotFoundError will be raised.
-            - If "empty", an empty content box will be added for the content pattern and 'add_slide' will continue without error.
-            - If "skip", this content pattern will be skipped (no box added).
+            - If "raise", a FileNotFoundError will be raised
+            - If "text", a content box will be added with the text of the missing content pattern
+            - If "empty", an empty content box will be added for the content pattern and 'add_slide' will continue without error
+            - If "skip", this content pattern will be skipped (no box added)
+        empty_slide : str, "keep" or "skip"
+            Whether to keep slides where no file pattern content was found (e.g. if missing_file is "text"/"empty"/"skip" but no files were found for content). Options are:
+            - "keep" (default): slides are kept even if the content pattern was not found
+            - "skip": slides without any content will not be added to the presentation
+        dpi : int, default 300
+            Dots per inch of the image. Only used when converting pdf to image.
+        max_pixels : int, default 1e8
+            Maximum number of pixels in an image. If an image has more pixels than this, it will be resized.
         """
 
         self.logger.debug("Started adding slide")
@@ -491,7 +511,7 @@ class PowerPointReport():
         else:
             content, filenames, tmp_files = self._get_content(parameters)
 
-            # skip full slide if no content was found and missing_file is set to "skip-slide"
+            # skip full slide if no content was found and missing_file is set to "skip"
             if content == "skip-slide":
                 return  # return before creating slide
 
@@ -617,7 +637,7 @@ class PowerPointReport():
 
         return img_files
 
-    def _expand_files(self, lst, missing_file="raise"):
+    def _expand_files(self, lst, missing_file="raise", empty_slide="keep"):
         """ Expand list of files by unix globbing or regex.
 
         Parameters
@@ -625,19 +645,26 @@ class PowerPointReport():
         lst : [str]
             list of strings which might (or might not) contain "*" or regex pattern.
         missing_file : str, default "raise"
-            What to do if no files are found for a glob pattern. I
+            What to do if no files are found for a glob pattern.
             - If "raise", a FileNotFoundError will be raised.
             - If "empty", None will be added to the content list.
             - If "skip", this content pattern will be skipped completely.
+        empty_slide : str, "keep" or "skip"
+            Whether to keep slides where no content was found (e.g. if missing_file is "text"/"empty"/"skip" but no files were found for content).
+            Default is "keep". If "skip", empty slides will not be added to the presentation.
 
         Returns
         -------
         content : [str]
-            list of files/content
+            list of files/content. If empty_slide is "skip", and no content was found for file patterns, the function will return "skip-slide".
         """
 
         if isinstance(lst, str):
             lst = [lst]
+
+        patterns = []
+        n_patterns = 0        # number of file patterns in lst
+        n_patterns_found = 0  # number of file patterns in lst for which files were found
 
         content = []  # list of files/content
         for element in lst:
@@ -661,12 +688,14 @@ class PowerPointReport():
 
                 # Establish if the str looks like a filename (or if it is treated a text)
                 looks_like_filename = _looks_like_filename(element)
+                if looks_like_filename:
+                    patterns.append(element)
+                    n_patterns += 1
 
                 # Add files to content list if found
                 if len(files_found) == 0 and looks_like_filename:  # no files were found, but it looks like a filename
-
                     if missing_file == "raise":
-                        raise FileNotFoundError(f"No files could be found for pattern: '{element}'. Adjust pattern or set missing_file='empty'/'skip' to ignore the missing file.")
+                        raise FileNotFoundError(f"No files could be found for pattern: '{element}'. Adjust pattern or set missing_file='empty'/'text'/'skip' to ignore the missing file.")
                     elif missing_file == "empty":
                         self.logger.warning(f"No files could be found for pattern: '{element}'. Adding empty box.")
                         content.append(None)
@@ -675,13 +704,11 @@ class PowerPointReport():
                         content.append(element)
                     elif missing_file == "skip":
                         self.logger.warning(f"No files could be found for pattern: '{element}'. Skipping this file on the slide.")
-                    elif missing_file == "skip-slide":
-                        self.logger.warning(f"No files could be found for pattern: '{element}'. Skipping slide.")
-                        return "skip-slide"
                     else:
                         raise ValueError(f"Unknown value for 'missing_file': '{missing_file}'")
 
                 elif len(files_found) > 0:
+                    n_patterns_found += 1
                     content.append(files_found)
 
                 else:  # no files were found; content is treated as text
@@ -689,6 +716,14 @@ class PowerPointReport():
 
             else:  # spaces in text; content is treated as text
                 content.append(element)
+
+        # Check if all patterns were found, and whether slide should be skipped
+        if n_patterns_found == 0 and n_patterns > 0:
+            if empty_slide == "keep":
+                self.logger.warning(f"No files were found for any of the filename patterns: {patterns}. Set empty_slide='skip' to skip slides with no content.")
+            elif empty_slide == "skip":
+                self.logger.info(f"No files were found for any the filename patterns: {patterns}, and empty_slide='skip'. Skipping slide.")
+                return "skip-slide"
 
         # Get the sorted list of files / content
         content_sorted = []  # flattened list of files/content
@@ -710,9 +745,10 @@ class PowerPointReport():
             content = [content]
 
         # Expand content files
-        content = self._expand_files(content, missing_file=parameters["missing_file"])
+        content = self._expand_files(content, missing_file=parameters["missing_file"], empty_slide=parameters["empty_slide"])
         self.logger.debug(f"Expanded content: {content}")
 
+        # Check if content is empty
         if content == "skip-slide":
             return "skip-slide", None, None
 
@@ -722,7 +758,7 @@ class PowerPointReport():
         tmp_files = []
         for element in content:
             if isinstance(element, str) and element.endswith(".pdf"):  # avoid None or list type and only replace pdfs
-                img_files = self._convert_pdf(element, parameters.get("pdf_pages", "all"))
+                img_files = self._convert_pdf(element, pdf_pages=parameters.get("pdf_pages", "all"), dpi=parameters.get("dpi", 300))
 
                 content_converted += img_files
                 filenames += [element] * len(img_files)  # replace filename with pdf name for each image
