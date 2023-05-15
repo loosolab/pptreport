@@ -306,12 +306,15 @@ class PowerPointReport():
             else:
                 parameters[k] = v  # overwrite previously set top/bottom/left/right margins if they are explicitly given
 
-        # Format "n_columns" to int
-        if "n_columns" in parameters:
-            try:
-                parameters["n_columns"] = int(parameters["n_columns"])
-            except ValueError:
-                raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{parameters['n_columns']}'. Please use an integer.")
+        # Format integer columns
+        int_params = ["n_columns", "max_pixels", "dpi"]
+        for param in int_params:
+            if param in parameters:
+                try:
+                    parameters[param] = int(parameters[param])
+                except ValueError:
+                    value = parameters[param]
+                    raise ValueError(f"Could not convert '{param}' parameter to int. The given value is: '{value}'. Please use an integer.")
 
         # Format "split" to int or bool
         if "split" in parameters:
