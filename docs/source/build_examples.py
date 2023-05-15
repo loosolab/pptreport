@@ -42,6 +42,11 @@ def main():
         print(cmd)
         os.system(cmd)
 
+    # Semove any existing png files
+    png_files = glob.glob("examples/*.png")
+    for png_file in png_files:
+        os.remove(png_file)
+
     # Convert all pdfs to individual pngs per page
     pdf_files = glob.glob("examples/*.pdf")
     for pdf_file in pdf_files:
