@@ -453,7 +453,7 @@ class PowerPointReport():
             - If "skip", this content pattern will be skipped (no box added)
         empty_slide : str, "keep" or "skip"
             Whether to keep slides where no file pattern content was found (e.g. if missing_file is "text"/"empty"/"skip" but no files were found for content). Options are:
-            - "keep" (default): slides are kept even if the content pattern was not found 
+            - "keep" (default): slides are kept even if the content pattern was not found
             - "skip": slides without any content will not be added to the presentation
         dpi : int, default 300
             Dots per inch of the image. Only used when converting pdf to image.
