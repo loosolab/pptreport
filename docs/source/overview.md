@@ -98,6 +98,8 @@ The example file at [examples/report_config.json](../../examples/report_config.j
 | fontsize | float | Fontsize of text content. If not given, the fontsize is automatically determined to fit the text in the textbox. | 12<br />10.5 |
 | pdf_pages| int or "all" | Pages to include if pdf is a multipage pdf. "all" includes all available pages| "all"<br />[1, 3]<br />2|
 |  missing_file | str | What to do if no files were found from a content pattern, e.g. "figure*.txt". Can be either "raise" (default), "text", "empty", "skip" or "skip-slide": <br />• "raise": a FileNotFoundError will be raised.<br />• "text": a content box will be added with the text of the missing content pattern<br />• "empty": an empty content box will be added for the missing content pattern.<br />• "skip": this content pattern will be skipped (no box added).<br />• "skip-slide": the whole slide will be skipped. | "raise"<br />"empty"<br />"skip" |
+| dpi | int | DPI (dots per inch) for converting images from .pdfs. Default: 300 | 300 |
+| max_pixels | int | Maximum number of pixels allowed for an image. If the image is larger than max_pixels, it will be resized. This option can be used to limit the size of the resulting presentation. Default is 1e8 pixels. | 1e8 |
 
 ## Source of example images
 

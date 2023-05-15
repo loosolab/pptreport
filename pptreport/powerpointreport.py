@@ -122,7 +122,9 @@ class PowerPointReport():
         "remove_placeholders": False,
         "fontsize": None,
         "pdf_pages": "all",
-        "missing_file": "raise"
+        "missing_file": "raise",
+        "dpi": 300,
+        "max_pixels": 1e8
     }
 
     def __init__(self, template=None, size="standard", verbosity=0):
@@ -439,6 +441,10 @@ class PowerPointReport():
             - If "raise", a FileNotFoundError will be raised.
             - If "empty", an empty content box will be added for the content pattern and 'add_slide' will continue without error.
             - If "skip", this content pattern will be skipped (no box added).
+        dpi : int, default 300
+            Dots per inch of the image. Only used when converting pdf to image.
+        max_pixels : int, default 1e9
+            Maximum number of pixels in an image. If an image has more pixels than this, it will be resized.
         """
 
         self.logger.debug("Started adding slide")
@@ -722,7 +728,7 @@ class PowerPointReport():
         tmp_files = []
         for element in content:
             if isinstance(element, str) and element.endswith(".pdf"):  # avoid None or list type and only replace pdfs
-                img_files = self._convert_pdf(element, parameters.get("pdf_pages", "all"))
+                img_files = self._convert_pdf(element, pdf_pages=parameters.get("pdf_pages", "all"), dpi=parameters.get("dpi", 300))
 
                 content_converted += img_files
                 filenames += [element] * len(img_files)  # replace filename with pdf name for each image
