@@ -8,6 +8,7 @@ import logging
 import sys
 import tempfile
 import fitz
+import numbers
 from natsort import natsorted
 
 # Pptx modules
@@ -53,23 +54,27 @@ def _replace_quotes(string):
 def _convert_to_bool(value):
     """ Convert a value to a boolean type. """
 
-    if isinstance(value, bool):
+    error_message = f"Could not convert string '{value}' to a boolean value."
+
+    if isinstance(value, bool):  # value is already bool
         return value
 
-    if isinstance(value, str):
+    elif isinstance(value, str):
         if value.lower() in ["true", "1", "t", "y", "yes"]:
             return True
         elif value.lower() in ["false", "0", "f", "n", "no"]:
             return False
         else:
-            raise ValueError(f"Could not convert string '{value}' to a boolean value.")
+            raise ValueError(error_message)
 
-    else:
+    elif isinstance(value, numbers.Number):
         try:
             converted = bool(value)  # can convert 1 to True and 0 to False
             return converted
         except Exception:
-            raise ValueError(f"Could not convert '{value}' to a boolean value.")
+            raise ValueError(error_message)
+    else:
+        raise ValueError(error_message)
 
 
 def _looks_like_filename(string):
@@ -128,6 +133,11 @@ class PowerPointReport():
         "empty_slide": "keep"
     }
 
+    valid_options = {
+        "fill_by": ["row", "column"],
+        "missing_file": ["raise", "ignore", "skip"],
+    }
+
     def __init__(self, template=None, size="standard", verbosity=0):
         """ Initialize a presentation object using an existing presentation (template) or from scratch (default) """
 
@@ -157,6 +167,12 @@ class PowerPointReport():
         """
 
         self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Test if verbosity is an integer
+        try:
+            verbosity = int(str(verbosity))  # if verbosity is a bool, converting to str raises an error
+        except Exception:
+            raise ValueError(f"Verbosity must be an integer - the given value is '{verbosity}'")
 
         # Setup formatting of handler
         H = logging.StreamHandler(sys.stdout)
@@ -283,16 +299,16 @@ class PowerPointReport():
 
         # Establish if content or grouped_content was given
         if "content" in parameters and "grouped_content" in parameters:
-            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
+            raise ValueError("Invalid input combination. Both 'content' and 'grouped_content' were given - please give only one input type.")
 
         # If split is given, content should be given
         if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
-            raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
+            raise ValueError("Invalid input combination. 'split' is given, but 'content' is empty")
 
         # If grouped_content is given, it should be a list
         if "grouped_content" in parameters:
             if not isinstance(parameters["grouped_content"], list):
-                raise TypeError("Invalid input. 'grouped_content' must be a list.")
+                raise TypeError(f"Invalid value for 'grouped_content' parameter: {parameters['grouped_content']}. 'grouped_content' must be a list.")
 
         # Set outer margin -> left/right/top/bottom
         orig_parameters = parameters.copy()
@@ -312,28 +328,36 @@ class PowerPointReport():
         for param in int_params:
             if param in parameters:
                 try:
-                    parameters[param] = int(parameters[param])
+                    parameters[param] = int(float(str(parameters[param])))  # str() raises an error for bools. float() ensures conversion from 1e10 notation
                 except ValueError:
-                    value = parameters[param]
-                    raise ValueError(f"Could not convert '{param}' parameter to int. The given value is: '{value}'. Please use an integer.")
+                    raise ValueError(f"Invalid value for '{param}' parameter: '{parameters[param]}'. Please use an integer.")
 
         # Format "empty_slide"
         if "empty_slide" in parameters:
             if parameters["empty_slide"] not in ["keep", "skip"]:
-                raise ValueError(f"Invalid input '{parameters['empty_slide']}' for 'empty_slide'. Must be either 'keep' or 'skip'.")
+                raise ValueError(f"Invalid value for 'empty_slide' parameter: {parameters['empty_slide']}. Must be either 'keep' or 'skip'.")
 
         # Format "split" to int or bool
         if "split" in parameters:
             try:  # try to convert to int first, e.g. if input is "2"
-                parameters["split"] = int(parameters["split"])
+                parameters["split"] = int(str(parameters["split"]))
             except Exception:  # if not possible, convert to bool
-                parameters["split"] = _convert_to_bool(parameters["split"])
+                try:
+                    parameters["split"] = _convert_to_bool(parameters["split"])
+                except ValueError:
+                    raise ValueError(f"Invalid value for 'split' parameter: {parameters['split']}. Must be an integer >= 1 or true/false.")
+            
+            if isinstance(parameters["split"], int) and parameters["split"] < 1:
+                raise ValueError(f"Invalid value for 'split' parameter: {parameters['split']}. Integer must be positive and >= 1.")
 
         # Format other purely boolean parameters to bool
         bool_parameters = ["remove_placeholders"]
         for param in bool_parameters:
             if param in parameters:
-                parameters[param] = _convert_to_bool(parameters[param])
+                try:
+                    parameters[param] = _convert_to_bool(parameters[param])
+                except ValueError:
+                    raise ValueError(f"Invalid value for '{param} parameter: {parameters[param]}. Must be either true or false.")
 
         # Format show_filename
         if "show_filename" in parameters:
@@ -344,16 +368,16 @@ class PowerPointReport():
                 if isinstance(value, str):
                     valid = ["filename", "filename_ext", "filepath", "filepath_ext", "path"]
                     if value not in valid:
-                        raise ValueError(f"Invalid parameter for 'show_filename'. The given value is: '{value}'. Please use one of the following: {valid}")
+                        raise ValueError(f"Invalid value for 'show_filename' parameter: '{value}'. Please use one of the following: {valid}")
                 else:
-                    raise e  # raise the original error
+                    raise ValueError(f"Invalid value for 'show_filename' parameter: '{value}'. Please use one of the following: {valid}")
 
         # Validate fontsize
         if "fontsize" in parameters:
             try:
-                parameters["fontsize"] = float(parameters["fontsize"])
-            except ValueError:
-                raise ValueError(f"Could not convert 'fontsize' parameter to value. The given value is: '{parameters['fontsize']}'. Please use a float or integer.")
+                parameters["fontsize"] = float(str(parameters["fontsize"]))  # str ensured that boolean will be an error
+            except Exception:
+                raise ValueError(f"Invalid value for 'fontsize' parameter: '{parameters['fontsize']}'. Please use a float or integer.")
 
         # Validate missing_file
         if "missing_file" in parameters:
@@ -362,7 +386,7 @@ class PowerPointReport():
             else:
                 parameters["missing_file"] = parameters["missing_file"].lower()
                 if parameters["missing_file"] not in ["raise", "empty", "text", "skip"]:
-                    raise ValueError(f"Invalid input '{parameters['missing_file']}' for 'missing_file'. Must be either 'raise', 'empty', 'text' or 'skip'.")
+                    raise ValueError(f"Invalid value for 'missing_file' parameter: '{parameters['missing_file']}'. Must be either 'raise', 'empty', 'text' or 'skip'.")
 
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
@@ -607,19 +631,31 @@ class PowerPointReport():
         if pdf_pages is None:
             raise IndexError(f"Index {pdf_pages} no valid Index.")
 
-        if isinstance(pdf_pages, str):
-            if pdf_pages.lower() == "all":
-                pdf_pages = pages
-            else:
-                raise ValueError(f"pdf_pages as string is expected to be 'all', but it is set to '{pdf_pages}'. Please set pdf_pages to 'all' or a list of integers.")
-        else:
-            if isinstance(pdf_pages, int):
-                pdf_pages = [pdf_pages]
+        # Convert pdf_pages to list
+        try:
+            pdf_pages = int(str(pdf_pages))  # could be a single value, e.g. 1
+        except ValueError:
+            try:
+                # could be a list of values or strings, e.g. ["1", "2"]
+                pdf_pages = [int(str(value)) for value in pdf_pages]
+            except ValueError:
+                try:
+                    if isinstance(pdf_pages, str) and pdf_pages.lower() == "all":  #pdf_pages might be a string "all"
+                        pdf_pages = pages
+                    elif isinstance(pdf_pages, str) and len(pdf_pages.split(",")) > 1:
+                        pdf_pages = [int(str(value)) for value in pdf_pages.split(",")] #pdf_pages might be a string "1,2" - in this case convert to list of int
+                    else:
+                        raise ValueError
+                except ValueError:
+                    raise ValueError(f"Invalid value for 'pdf_pages' parameter: '{pdf_pages}'. Expected an integer, a list of integers or 'all'.")
 
-            # all index available? will also fail if index not int
-            index_mismatch = [page for page in pdf_pages if page not in pages]
-            if len(index_mismatch) != 0:
-                raise IndexError(f"Pages {index_mismatch} not available for {pdf}")
+        if not isinstance(pdf_pages, list):
+            pdf_pages = [pdf_pages]
+
+        # all index available? will also fail if index not int
+        index_mismatch = [page for page in pdf_pages if page not in pages]
+        if len(index_mismatch) != 0:
+            raise IndexError(f"Pages {index_mismatch} not available for {pdf}")
 
         img_files = []
         for page_num in pdf_pages:
@@ -659,7 +695,7 @@ class PowerPointReport():
             list of files/content. If empty_slide is "skip", and no content was found for file patterns, the function will return "skip-slide".
         """
 
-        if isinstance(lst, str):
+        if not isinstance(lst, list):
             lst = [lst]
 
         patterns = []
@@ -670,6 +706,7 @@ class PowerPointReport():
         for element in lst:
 
             files_found = []   # names of files found for this element
+            element = str(element) if element is not None else element # convert to string, e.g. if input was an int
 
             # If the number of words in element is 1, it could be a file
             if element is not None and len(element.split()) == 1:
@@ -778,7 +815,7 @@ class PowerPointReport():
             filenames = [filenames]
         else:
             if len(content) == 0:
-                raise ValueError("Split is True, but 'content' is empty.")
+                raise ValueError("Invalid input combination. Split is True, but 'content' is empty.")
             else:
                 if isinstance(parameters["split"], int):
                     content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]

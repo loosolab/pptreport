@@ -268,6 +268,8 @@ class Box():
         """
 
         max_pixels = self.max_pixels
+        if max_pixels < 4:
+            raise ValueError("Invalid value for 'max_pixels' parameter: '{max_pixels}'. Please use an integer higher than 4.")
 
         im = Image.open(filename)
         im_width, im_height = im.size
@@ -329,6 +331,12 @@ class Box():
 
         self.logger.debug(f"Getting content alignment for box '{self.box_index}'. Input content alignment is '{self.content_alignment}'")
 
+        # Check if current alignment is valid
+        valid_alignments = ["left", "right", "center", "lower", "upper",
+                            "lower left", "lower center", "lower right",
+                            "upper left", "upper center", "upper right",
+                            "center left", "center center", "center right"]
+
         if isinstance(self.content_alignment, str):  # if content alignment is a string, use it for all boxes
             this_alignment = self.content_alignment
 
@@ -338,16 +346,10 @@ class Box():
             else:
                 this_alignment = self.content_alignment[self.box_index]
         else:
-            raise ValueError(f"Content alignment '{self.content_alignment}' is not valid. Valid content alignments are: str or list of str")
-
-        # Check if current alignment is valid
-        valid_alignments = ["left", "right", "center", "lower", "upper",
-                            "lower left", "lower center", "lower right",
-                            "upper left", "upper center", "upper right",
-                            "center left", "center center", "center right"]
+            raise ValueError(f"Invalid value for 'content_alignment' parameter: '{self.content_alignment}'. Valid content alignments are: {valid_alignments}")
 
         if this_alignment.lower() not in valid_alignments:
-            raise ValueError(f"Alignment '{self.content_alignment}' is not valid. Valid content alignments are: {valid_alignments}")
+            raise ValueError(f"Invalid value for 'content_alignment' parameter: '{self.content_alignment}'. Valid content alignments are: {valid_alignments}")
 
         # Expand into the structure "<vertical> <horizontal>"
         if this_alignment.lower() in ["left", "right", "center"]:
@@ -375,8 +377,8 @@ class Box():
 
         # Check if current alignment is valid
         valid_alignments = ["left", "right", "center"]
-
-        if this_alignment.lower() not in valid_alignments:
+        this_alignment = this_alignment.lower().strip()  #remove any trailing spaces
+        if this_alignment not in valid_alignments:
             raise ValueError(f"Alignment '{self.filename_alignment}' is not valid. Valid filename alignments are: {valid_alignments}")
 
         return this_alignment

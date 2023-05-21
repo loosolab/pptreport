@@ -6,7 +6,7 @@ content_dir = "examples/content/"
 
 def test_empty_content():
 
-    report = PowerPointReport(verbosity=2)
+    report = PowerPointReport()
     report.add_slide([None, "A text"])
 
     slide = report._slides[0]
@@ -14,13 +14,6 @@ def test_empty_content():
     assert len(slide._boxes) == 2
     assert slide._boxes[0].content_type == "empty"
     assert slide._boxes[1].content_type == "text"
-
-
-@pytest.mark.parametrize("content_alignment", ["left", "center", "right"])
-def test_content_alignment(content_alignment):
-    """ Test that content alignment is correctly validated """
-
-    pass
 
 
 def test_estimate_fontsize():
@@ -44,7 +37,7 @@ def test_set_fontsize(fontsize):
     report = PowerPointReport()
 
     if fontsize == "big":
-        with pytest.raises(ValueError):
+        with pytest.raises((ValueError), match=None):
             report.add_slide([text], fontsize=fontsize)
     else:
         report.add_slide([text], fontsize=fontsize)

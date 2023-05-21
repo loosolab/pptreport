@@ -40,8 +40,10 @@ class Slide():
         # Check validity of n_columns
         try:
             self.n_columns = int(self.n_columns)
+            if self.n_columns <= 0:  # Check that n_columns is larger than 0
+                raise ValueError
         except ValueError:
-            raise ValueError(f"Could not convert 'n_columns' parameter to int. The given value is: '{self.n_columns}'. Please use an integer.")
+            raise ValueError(f"Invalid value for 'n_columns' parameter: '{self.n_columns}'. Please use a positive integer.")
 
         # Get variables from self
         layout = self.content_layout
@@ -120,13 +122,13 @@ class Slide():
                 try:
                     value = [v for v in value.split(",")]
                 except ValueError:
-                    raise ValueError(f"Could not convert '{param}' parameter to list of values. The given value is: '{value}'. Please use a list of values.")
+                    raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please use a list of values.")
 
             # Convert from list of strings to list of floats
             try:
-                value = [float(v) for v in value]
+                value = [float(str(v)) for v in value]
             except Exception:
-                raise ValueError(f"Could not convert '{param}' parameter to list of values. The given value is: '{value}'. Please use a list of values.")
+                raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please use a list of values.")
 
             setattr(self, param, value)  # Set the new value
 
