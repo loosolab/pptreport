@@ -367,7 +367,6 @@ class PowerPointReport():
             if parameters["missing_file"] not in ["raise", "empty", "text", "skip"]:
                 raise ValueError(f"Invalid value for 'missing_file' parameter: '{parameters['missing_file']}'. Must be either 'raise', 'empty', 'text' or 'skip'.")
 
-
         # --- Validate input combinations --- #
 
         # Establish if content or grouped_content was given
