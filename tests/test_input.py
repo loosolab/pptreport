@@ -107,6 +107,8 @@ def test_content_input(content, valid):
 # grouped content
 @pytest.mark.parametrize("grouped_content, valid",
                          [(["string", content_dir + "colored_animals/(.*)_blue.jpg", content_dir + "colored_animals/(.*)_blue.jpg"], True),
+                          ([content_dir + "colored_animals/.*_blue.jpg", content_dir + "colored_animals/(.*)_blue.jpg"], False),  # no groups
+                          ([content_dir + "colored_animals/(.*)_(.*).jpg"], False),  # two groups
                           (["no", "groups"], False),
                           ("A text", False)])
 def test_grouped_content(grouped_content, valid):
@@ -205,8 +207,11 @@ def test_margins_input(margins, valid, parameter):
 @pytest.mark.parametrize("parameter", ["width_ratios", "height_ratios"])
 @pytest.mark.parametrize("ratios, valid",
                          [([1, 2], True),
-                          ([0, 1], False),
-                          ([0, 1, 2, 3], False),
+                          ("1, 2", True),  # comma separated string can be converted to list
+                          ([1, 2, 3, 5, 6], True),  # too many ratios
+                          ([1], True),  # too few ratios
+                          ([0, 1], False),  # ratio cannot be 0
+                          ([], False),  # No ratios
                           ([0, -2], False),
                           (False, False),
                           (0, False)])

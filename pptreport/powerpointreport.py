@@ -888,9 +888,9 @@ class PowerPointReport():
 
                     groups = m.groups()
                     if len(groups) == 0:
-                        raise ValueError(f"Regex {pattern} does not contain any groups.")
+                        raise ValueError(f"Invalid value for 'grouped_content' parameter. Regex {pattern} does not contain any groups.")
                     elif len(groups) > 1:
-                        raise ValueError(f"Regex {pattern} contains more than one group.")
+                        raise ValueError(f"Invalid value for 'grouped_content' parameter. Regex {pattern} contains more than one group.")
                     group = groups[0]
 
                     # Save the file to the group

@@ -23,10 +23,10 @@ def test_estimate_fontsize():
     """ Check that error is correctly raised and caught when fontsize cannot be estimated """
 
     short_word = "This is a short text".replace(" ", "-")
-    long_word = "This is a very long text to find fontsize for, but which might give an error".replace(" ", "-")
+    long_word = "This is a very long text with a looooooooooooooong word to find fontsize for, but which might give an error".replace(" ", "-")
 
     report = PowerPointReport()
-    report.add_slide([short_word, long_word])
+    report.add_slide([short_word, long_word], width_ratios=[10, 1])  # provoke very little space for long text
 
     assert len(report._slides) == 1
 

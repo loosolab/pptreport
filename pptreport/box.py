@@ -20,7 +20,7 @@ def split_string(string, length):
     return [string[i:i + length] for i in range(0, len(string), length)]
 
 
-def estimate_fontsize(txt_frame, min_size=6, max_size=18):
+def estimate_fontsize(txt_frame, min_size=6, max_size=18, logger=None):
     """
     Resize text to fit the textbox.
 
@@ -49,16 +49,19 @@ def estimate_fontsize(txt_frame, min_size=6, max_size=18):
     font = pkg_resources.resource_filename("pptreport", "fonts/OpenSans-Regular.ttf")
 
     # Calculate best fontsize
+    size = None
     try:
         size = TextFitter.best_fit_font_size(text, txt_frame._extents, max_size, font)
 
-    except TypeError as e:  # happens with long filenames, which cannot fit on one line
+    except TypeError:  # happens with long filenames, which cannot fit on one line
 
         # Try fitting by splitting long words; decrease length if TextFitter still fails
         max_word_len = 20
         while True:
             if max_word_len < 5:
-                raise e
+                if logger is not None:
+                    logger.warning(f"Could not fit text '{text}' in textbox. Setting fontsize to {min_size}.")
+                break  # give up; set text to smallest size
             try:
                 words = text.split(" ")
                 words = [split_string(word, max_word_len) for word in words]
@@ -561,7 +564,7 @@ class Box():
         # Try to fit text size to the box
         if self.fontsize is None:
             self.logger.debug("Estimating fontsize...")
-            size = estimate_fontsize(txt_frame)
+            size = estimate_fontsize(txt_frame, logger=self.logger)
             self.logger.debug(f"Found: {size}")
         else:
             size = self.fontsize

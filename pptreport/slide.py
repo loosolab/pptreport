@@ -120,19 +120,32 @@ class Slide():
                 try:
                     value = [v for v in value.split(",")]
                 except ValueError:
-                    raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please use a list of values.")
+                    raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please give a list of values.")
 
             # Convert from list of strings to list of floats
             try:
                 value = [float(str(v)) for v in value]
+                _ = value[0]  # Check that the list is not empty
             except Exception:
-                raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please use a list of values.")
-
-            setattr(self, param, value)  # Set the new value
+                raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please give a list of values.")
 
             # Check that all values are positive
             if any([v <= 0 for v in value]):
-                raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please use a list of positive values.")
+                raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please give a list of positive values.")
+
+            # Check that the number of values is equal to the number of columns
+            expected = self.n_rows if param == "height_ratios" else self.n_cols
+            row_col_string = "rows" if param == "height_ratios" else "columns"
+            if len(value) > expected:
+                self.logger.warning(f"The number of values given in '{param}' is larger than the number of {row_col_string} ({expected}). The extra values will be ignored.")
+                value = value[:expected]
+
+            elif len(value) < expected:
+                self.logger.warning(f"The number of values given in '{param}' is smaller than the number of {row_col_string} ({expected}). The list will be extended with the last value ({value[-1]}).")
+                missing = expected - len(value)
+                value.extend([value[-1]] * missing)
+
+            setattr(self, param, value)  # Set the new value
 
     def _validate_layout(self, layout_matrix):
         """ Validate the given layout matrix. """
