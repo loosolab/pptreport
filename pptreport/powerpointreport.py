@@ -297,19 +297,6 @@ class PowerPointReport():
     def _validate_parameters(self, parameters):
         """ Check the format of the input parameters for the slide and return an updated dictionary. """
 
-        # Establish if content or grouped_content was given
-        if "content" in parameters and "grouped_content" in parameters:
-            raise ValueError("Invalid input combination. Both 'content' and 'grouped_content' were given - please give only one input type.")
-
-        # If split is given, content should be given
-        if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
-            raise ValueError("Invalid input combination. 'split' is given, but 'content' is empty")
-
-        # If grouped_content is given, it should be a list
-        if "grouped_content" in parameters:
-            if not isinstance(parameters["grouped_content"], list):
-                raise TypeError(f"Invalid value for 'grouped_content' parameter: {parameters['grouped_content']}. 'grouped_content' must be a list.")
-
         # Set outer margin -> left/right/top/bottom
         orig_parameters = parameters.copy()
         for k in list(parameters.keys()):
@@ -339,16 +326,17 @@ class PowerPointReport():
 
         # Format "split" to int or bool
         if "split" in parameters:
-            try:  # try to convert to int first, e.g. if input is "2"
-                parameters["split"] = int(str(parameters["split"]))
-            except Exception:  # if not possible, convert to bool
-                try:
-                    parameters["split"] = _convert_to_bool(parameters["split"])
-                except ValueError:
-                    raise ValueError(f"Invalid value for 'split' parameter: {parameters['split']}. Must be an integer >= 1 or true/false.")
-            
-            if isinstance(parameters["split"], int) and parameters["split"] < 1:
-                raise ValueError(f"Invalid value for 'split' parameter: {parameters['split']}. Integer must be positive and >= 1.")
+            if not isinstance(parameters["split"], bool):  # only try to convert if not already bool
+                try:  # try to convert to int first, e.g. if input is "2"
+                    parameters["split"] = int(str(parameters["split"]))
+                except Exception:  # if not possible, convert to bool
+                    try:
+                        parameters["split"] = _convert_to_bool(parameters["split"])
+                    except ValueError:
+                        raise ValueError(f"Invalid value for 'split' parameter: {parameters['split']}. Must be an integer >= 1 or true/false.")
+
+            if not isinstance(parameters["split"], bool) and parameters["split"] < 1:  # if value is not bool, it is integer
+                raise ValueError(f"Invalid value for 'split' parameter: {parameters['split']}. Integer must be >= 1.")
 
         # Format other purely boolean parameters to bool
         bool_parameters = ["remove_placeholders"]
@@ -356,17 +344,17 @@ class PowerPointReport():
             if param in parameters:
                 try:
                     parameters[param] = _convert_to_bool(parameters[param])
-                except ValueError:
-                    raise ValueError(f"Invalid value for '{param} parameter: {parameters[param]}. Must be either true or false.")
+                except Exception as e:
+                    raise ValueError(f"Invalid value for '{param}' parameter: {parameters[param]}. Error was: {e}")
 
         # Format show_filename
         if "show_filename" in parameters:
             value = parameters["show_filename"]
             try:
                 parameters["show_filename"] = _convert_to_bool(value)
-            except ValueError as e:  # if the value is not a bool, it should be a string
+            except Exception:  # if the value is not a bool, it should be a string
+                valid = ["filename", "filename_ext", "filepath", "filepath_ext", "path"]
                 if isinstance(value, str):
-                    valid = ["filename", "filename_ext", "filepath", "filepath_ext", "path"]
                     if value not in valid:
                         raise ValueError(f"Invalid value for 'show_filename' parameter: '{value}'. Please use one of the following: {valid}")
                 else:
@@ -382,11 +370,26 @@ class PowerPointReport():
         # Validate missing_file
         if "missing_file" in parameters:
             if not isinstance(parameters["missing_file"], str):
-                raise TypeError("Invalid input for 'missing_file' - must be either 'raise', 'empty', 'text' or 'skip'.")
+                raise TypeError("Invalid value for 'missing_file' - must be either 'raise', 'empty', 'text' or 'skip'.")
             else:
                 parameters["missing_file"] = parameters["missing_file"].lower()
                 if parameters["missing_file"] not in ["raise", "empty", "text", "skip"]:
                     raise ValueError(f"Invalid value for 'missing_file' parameter: '{parameters['missing_file']}'. Must be either 'raise', 'empty', 'text' or 'skip'.")
+
+        # --- Validate input combinations --- #
+
+        # Establish if content or grouped_content was given
+        if "content" in parameters and "grouped_content" in parameters:
+            raise ValueError("Invalid input combination. Both 'content' and 'grouped_content' were given - please give only one input type.")
+
+        # If split is given, content should be given
+        if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
+            raise ValueError("Invalid input combination. 'split' is given, but 'content' is empty")
+
+        # If grouped_content is given, it should be a list
+        if "grouped_content" in parameters:
+            if not isinstance(parameters["grouped_content"], list):
+                raise TypeError(f"Invalid value for 'grouped_content' parameter: {parameters['grouped_content']}. 'grouped_content' must be a list.")
 
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
@@ -506,6 +509,7 @@ class PowerPointReport():
         if "grouped_content" in parameters:
 
             content_per_group = self._get_paired_content(parameters["grouped_content"])
+            self.logger.debug("Grouped content: {}".format(content_per_group))
 
             tmp_files = []
             # Create one slide per group
@@ -521,7 +525,8 @@ class PowerPointReport():
                             img_files = self._convert_pdf(element, parameters["pdf_pages"])
 
                             if len(img_files) > 1:
-                                raise ValueError(f"Multiple pages in pdf is not supported for grouped content. Found {len(img_files)} in {content}, as pdf_pages is set to '{parameters['pdf_pages']}'. "
+                                raise ValueError(f"Invalid value for 'pdf_pages': {parameters['pdf_pages']}. "
+                                                 f"Multiple pages in pdf is not supported for grouped content. Found {len(img_files)} pages in {content}, as pdf_pages is set to '{parameters['pdf_pages']}'. "
                                                  "Please adjust pdf_pages to only include one page, e.g. pdf_pages=1.")
                             content[idx] = img_files[0]
                             tmp_files.append(content[idx])
@@ -620,8 +625,15 @@ class PowerPointReport():
             list containing converted filenames (in the tmp folder)
         """
 
+        # Check that dpi is > 0
+        if dpi <= 0:
+            raise ValueError(f"Invalid value for 'dpi' parameter: {dpi}. Must be an integer > 0.")
+
         # open pdf with fitz module from pymupdf
-        doc = fitz.open(pdf)
+        try:
+            doc = fitz.open(pdf)
+        except Exception as e:
+            raise ValueError(f"Could not open pdf file {pdf}. Error was: {e}")
 
         # get page count
         pages = doc.page_count
@@ -640,10 +652,10 @@ class PowerPointReport():
                 pdf_pages = [int(str(value)) for value in pdf_pages]
             except ValueError:
                 try:
-                    if isinstance(pdf_pages, str) and pdf_pages.lower() == "all":  #pdf_pages might be a string "all"
+                    if isinstance(pdf_pages, str) and pdf_pages.lower() == "all":  # pdf_pages might be a string "all"
                         pdf_pages = pages
                     elif isinstance(pdf_pages, str) and len(pdf_pages.split(",")) > 1:
-                        pdf_pages = [int(str(value)) for value in pdf_pages.split(",")] #pdf_pages might be a string "1,2" - in this case convert to list of int
+                        pdf_pages = [int(str(value)) for value in pdf_pages.split(",")]  # pdf_pages might be a string "1,2" - in this case convert to list of int
                     else:
                         raise ValueError
                 except ValueError:
@@ -655,7 +667,7 @@ class PowerPointReport():
         # all index available? will also fail if index not int
         index_mismatch = [page for page in pdf_pages if page not in pages]
         if len(index_mismatch) != 0:
-            raise IndexError(f"Pages {index_mismatch} not available for {pdf}")
+            raise IndexError(f"Invalid value for 'pdf_pages' parameter: '{pdf_pages}'. Pages {index_mismatch} not available for {pdf}. Available pages are: {pages}.")
 
         img_files = []
         for page_num in pdf_pages:
@@ -706,7 +718,7 @@ class PowerPointReport():
         for element in lst:
 
             files_found = []   # names of files found for this element
-            element = str(element) if element is not None else element # convert to string, e.g. if input was an int
+            element = str(element) if element is not None else element  # convert to string, e.g. if input was an int
 
             # If the number of words in element is 1, it could be a file
             if element is not None and len(element.split()) == 1:
@@ -882,6 +894,7 @@ class PowerPointReport():
 
         # Search for regex groups
         group_content = {}  # dict of lists of content input
+        n_group_matches = 0
         for i, pattern in enumerate(raw_content):
             group_content[i] = {}
 
@@ -902,6 +915,11 @@ class PowerPointReport():
 
                     # Save the file to the group
                     group_content[i][group] = fil
+                    n_group_matches += 1
+
+        # Check that at least one group was found
+        if n_group_matches == 0:
+            raise ValueError(f"Invalid value for 'grouped_content' parameter: {raw_content}. No groups were found for any of the regex patterns.")
 
         # Collect all groups found
         all_regex_groups = sum([list(d.keys()) for d in group_content.values()], [])  # flatten list of lists

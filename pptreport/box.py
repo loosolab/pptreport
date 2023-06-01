@@ -87,7 +87,10 @@ def format_textframe(txt_frame, size=12, name="Calibri"):
 
     for paragraph in txt_frame.paragraphs:
         for run in paragraph.runs:
-            run.font.size = Pt(size)
+            try:
+                run.font.size = Pt(size)
+            except Exception as e:
+                raise ValueError(f"Invalid value for 'fontsize' parameter: {size}. Error was: {e}")
             run.font.name = "Calibri"
 
 
@@ -373,13 +376,13 @@ class Box():
             else:
                 this_alignment = self.filename_alignment[self.box_index]
         else:
-            raise ValueError(f"Filename alignment '{self.filename_alignment}' is not valid. Valid filename alignments are: str or list of str")
+            raise ValueError(f"Invalid value for 'filename_alignment' parameter: {self.filename_alignment}. The input type must be string or list of strings.")
 
         # Check if current alignment is valid
         valid_alignments = ["left", "right", "center"]
-        this_alignment = this_alignment.lower().strip()  #remove any trailing spaces
+        this_alignment = this_alignment.lower().strip()  # remove any trailing spaces
         if this_alignment not in valid_alignments:
-            raise ValueError(f"Alignment '{self.filename_alignment}' is not valid. Valid filename alignments are: {valid_alignments}")
+            raise ValueError(f"Invalid value for 'filename_alignment' parameter: {self.filename_alignment}. Valid filename alignments are: {valid_alignments}.")
 
         return this_alignment
 

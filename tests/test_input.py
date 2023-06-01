@@ -39,17 +39,17 @@ def test_verbosity(verbosity, valid):
     """ Test that the logger levels are correct """
 
     if valid:
-        report = PowerPointReport(verbosity=verbosity)
+        _ = PowerPointReport(verbosity=verbosity)
     else:
         with pytest.raises(ValueError):
-            report = PowerPointReport(verbosity=verbosity)
+            _ = PowerPointReport(verbosity=verbosity)
 
 
 #####################################################################
 # Tests for input to .add_slide
 #####################################################################
 
-def test_validation(config, valid, match="Invalid value for "):
+def validate(config, valid, match="Invalid value for "):
 
     default_config = {"content": ["A text", content_dir + "cat.jpg", content_dir + "chips.pdf"]}
     default_config.update(config)
@@ -58,10 +58,11 @@ def test_validation(config, valid, match="Invalid value for "):
     if valid:
         report.add_slide(**default_config)
     else:
-        with pytest.raises((ValueError, TypeError), match=match) as e:
+        with pytest.raises((ValueError, TypeError, IndexError), match=match) as e:
             report.add_slide(**default_config)
 
         print(f"Configuration {config} failed with error: {e.value}\n")
+
 
 # ------------------------------------------------------------------- #
 @pytest.mark.parametrize("content, valid",
@@ -71,7 +72,7 @@ def test_validation(config, valid, match="Invalid value for "):
                           (1, True)])
 def test_content_input(content, valid):
     config = {"content": content}
-    test_validation(config, valid)
+    validate(config, valid)
 
 
 # ------------------------------------------------------------------- #
@@ -81,18 +82,20 @@ def test_content_input(content, valid):
                           ("A text", False)])
 def test_grouped_content(grouped_content, valid):
     config = {"content": None, "grouped_content": grouped_content}
-    test_validation(config, valid)
+    validate(config, valid)
 
 
 # ------------------------------------------------------------------- #
+# Set title (all types can be converted to str)
 @pytest.mark.parametrize("title, valid",
                          [("A title", True),
                           (None, True),
                           (1, True),
-                          ([], False)])
+                          (dict, True)])
 def test_title_input(title, valid):
     config = {"title": title}
-    test_validation(config, valid)
+    validate(config, valid)
+
 
 # ------------------------------------------------------------------- #
 # slide layout
@@ -152,7 +155,7 @@ def test_content_layout(content, valid):
                           (0, False)])
 def test_content_alignment(content_alignment, valid):
     config = {"content_alignment": content_alignment}
-    test_validation(config, valid)
+    validate(config, valid)
 
 
 # ------------------------------------------------------------------- #
@@ -166,7 +169,7 @@ def test_content_alignment(content_alignment, valid):
 def test_margins_input(margins, valid, parameter):
 
     config = {parameter: margins}
-    test_validation(config, valid)
+    validate(config, valid)
 
 
 # ------------------------------------------------------------------- #
@@ -181,7 +184,7 @@ def test_margins_input(margins, valid, parameter):
                           (0, False)])
 def test_ratios_input(ratios, valid, parameter):
     config = {parameter: ratios}
-    test_validation(config, valid)
+    validate(config, valid)
 
 
 # ------------------------------------------------------------------- #
@@ -206,9 +209,10 @@ def test_add_notes(notes, valid):
 
 # ------------------------------------------------------------------- #
 # split
-@pytest.mark.parametrize("split, valid", 
+@pytest.mark.parametrize("split, valid",
                          [(True, True),
                           (False, True),
+                          ("False", True),
                           (2, True),
                           ("2", True),
                           ("invalid", False),
@@ -216,7 +220,7 @@ def test_add_notes(notes, valid):
                           ([], False)])
 def test_split_input(split, valid):
     config = {"split": split}
-    test_validation(config, valid)
+    validate(config, valid)
 
 
 # ------------------------------------------------------------------- #
@@ -232,11 +236,11 @@ def test_split_input(split, valid):
                           ([], False)])
 def test_show_filename_input(show_filename, valid):
     config = {"show_filename": show_filename}
-    test_validation(config, valid)
+    validate(config, valid)
 
 
 # ------------------------------------------------------------------- #
-#filename alignment
+# filename alignment
 @pytest.mark.parametrize("filename_alignment, valid",
                          [("left", True),
                           ("center", True),
@@ -248,7 +252,7 @@ def test_show_filename_input(show_filename, valid):
                           (0, False)])
 def test_filename_alignment(filename_alignment, valid):
     config = {"filename_alignment": filename_alignment, "show_filename": True}
-    test_validation(config, valid, "Invalid value for 'filename_alignment'")
+    validate(config, valid, "Invalid value for 'filename_alignment'")
 
 
 # ------------------------------------------------------------------- #
@@ -261,7 +265,8 @@ def test_filename_alignment(filename_alignment, valid):
                           ([], False)])
 def test_fill_by_input(fill_by, valid):
     config = {"fill_by": fill_by}
-    test_validation(config, valid)
+    validate(config, valid)
+
 
 # ------------------------------------------------------------------- #
 # remove_placeholders
@@ -273,7 +278,7 @@ def test_fill_by_input(fill_by, valid):
                           ([], False)])
 def test_remove_placeholders_input(remove_placeholders, valid):
     config = {"remove_placeholders": remove_placeholders}
-    test_validation(config, valid, "Invalid input for ")
+    validate(config, valid, "Invalid value for 'remove_placeholders'")
 
 
 # ------------------------------------------------------------------- #
@@ -287,7 +292,8 @@ def test_remove_placeholders_input(remove_placeholders, valid):
                           ([], False)])
 def test_fontsize_input(fontsize, valid):
     config = {"fontsize": fontsize}
-    test_validation(config, valid, "Invalid input for ")
+    validate(config, valid, "Invalid value for 'fontsize'")
+
 
 # ------------------------------------------------------------------- #
 # pdf_pages
@@ -302,7 +308,7 @@ def test_fontsize_input(fontsize, valid):
                           ([0], False)])
 def test_pdfpages_input(pdf_pages, valid):
     config = {"pdf_pages": pdf_pages, "content": content_dir + "pdfs/multidogs_1.pdf"}
-    test_validation(config, valid, "Invalid input for ")
+    validate(config, valid, "Invalid value for 'pdf_pages'")
 
 
 @pytest.mark.parametrize("pdf_pages, valid", [("all", False),
@@ -311,7 +317,7 @@ def test_pdfpages_input(pdf_pages, valid):
 def test_pdf_pages_grouped(pdf_pages, valid):
 
     config = {"content": None, "grouped_content": [content_dir + "pdfs/multidogs_([0-9]).pdf"], "pdf_pages": pdf_pages}
-    test_validation(config, valid, "Invalid input for ")
+    validate(config, valid, "Invalid value for ")
 
 
 # ------------------------------------------------------------------- #
@@ -325,7 +331,8 @@ def test_pdf_pages_grouped(pdf_pages, valid):
                           (True, False)])
 def test_missing_file_input(missing_file, valid):
     config = {"missing_file": missing_file}
-    test_validation(config, valid, "Invalid input for ")
+    validate(config, valid, "Invalid value for ")
+
 
 # ------------------------------------------------------------------- #
 # empty_slide
@@ -336,12 +343,12 @@ def test_missing_file_input(missing_file, valid):
                           (False, False)])
 def test_empty_slide(empty_slide, valid):
     config = {"empty_slide": empty_slide}
-    test_validation(config, valid, "Invalid input for ")
+    validate(config, valid, "Invalid value for ")
 
 
 # ------------------------------------------------------------------- #
 # integers
-@pytest.mark.parametrize("parameter", ["n_columns", "dpi", "max_pixels"])
+@pytest.mark.parametrize("parameter", ["n_columns", "dpi"])
 @pytest.mark.parametrize("value, valid",
                          [(1, True),
                           ("1e3", True),
@@ -352,7 +359,7 @@ def test_empty_slide(empty_slide, valid):
                           (False, False)])
 def test_integers(value, valid, parameter):
     config = {parameter: value}
-    test_validation(config, valid, match=f"Invalid value for '{parameter}' parameter")
+    validate(config, valid, match=f"Invalid value for '{parameter}' parameter")
 
 
 # ------------------------------------------------------------------- #
@@ -368,7 +375,7 @@ def test_integers(value, valid, parameter):
                           (False, False)])
 def test_max_pixels_input(value, valid):
     config = {"max_pixels": value}
-    test_validation(config, valid, match=f"Invalid value for 'max_pixels' parameter")
+    validate(config, valid, match="Invalid value for 'max_pixels' parameter")
 
 
 # ------------------------------------------------------------------- #
@@ -377,4 +384,4 @@ def test_max_pixels_input(value, valid):
                                     {"content": None, "split": True}])   # content has to given when split is True
 def test_combinations(params):
 
-    test_validation(params, False, "Invalid input combination")
+    validate(params, False, "Invalid input combination")

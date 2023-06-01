@@ -97,13 +97,11 @@ class Slide():
                     value = float(value)
                     setattr(self, margin, value)
                 except ValueError:
-                    raise ValueError(f"Could not convert '{margin}' to a float. The given value is: {value}")
+                    raise ValueError(f"Invalid value for '{margin}' parameter: {value}. Could not convert to a float.")
 
                 # Check whether value is positive
                 if value < 0:
-                    raise ValueError(f"Margin '{margin}' cannot be negative. The given value is: {value}")
-
-                # Check upper margin sizes
+                    raise ValueError(f"Invalid value for '{margin}' parameter: {value}. Margin cannot be negative")
 
     def _validate_ratios(self):
         """ Validate the values of width and height ratios """
@@ -131,6 +129,10 @@ class Slide():
                 raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please use a list of values.")
 
             setattr(self, param, value)  # Set the new value
+
+            # Check that all values are positive
+            if any([v <= 0 for v in value]):
+                raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please use a list of positive values.")
 
     @staticmethod
     def _validate_layout(layout_matrix):
@@ -173,10 +175,7 @@ class Slide():
         if self.title is not None:
 
             # Make sure that title is a string
-            try:
-                self.title = str(self.title)
-            except Exception:
-                raise ValueError(f"Could not convert 'title' to a string. The given value is: '{self.title}'.")
+            self.title = str(self.title)
 
             if self._slide.shapes.title is None:
                 self.logger.warning("Could not set title of slide. The slide does not have a title box.")
@@ -237,6 +236,8 @@ class Slide():
 
         # How many columns and rows are there?
         n_rows, n_cols = layout_matrix.shape
+        self.n_rows = n_rows
+        self.n_cols = n_cols
 
         # Get total height and width of pictures
         margin_width = Emu(left_margin_unit + right_margin_unit + (n_cols - 1) * inner_margin_unit)
