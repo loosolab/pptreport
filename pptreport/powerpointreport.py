@@ -130,7 +130,8 @@ class PowerPointReport():
         "missing_file": "raise",
         "dpi": 300,
         "max_pixels": 1e8,
-        "empty_slide": "keep"
+        "empty_slide": "keep",
+        "show_borders": False,
     }
 
     valid_options = {
@@ -167,6 +168,7 @@ class PowerPointReport():
         """
 
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.handlers = []  # remove any existing handlers
 
         # Test if verbosity is an integer
         try:
@@ -181,7 +183,7 @@ class PowerPointReport():
 
         # Set verbosity and formatting
         if verbosity == 0:
-            self.logger.setLevel(logging.ERROR)
+            self.logger.setLevel(logging.WARNING)
             H.setFormatter(simple_formatter)
         elif verbosity == 1:
             self.logger.setLevel(logging.INFO)
@@ -339,7 +341,7 @@ class PowerPointReport():
                 raise ValueError(f"Invalid value for 'split' parameter: {parameters['split']}. Integer must be >= 1.")
 
         # Format other purely boolean parameters to bool
-        bool_parameters = ["remove_placeholders"]
+        bool_parameters = ["remove_placeholders", "show_borders"]
         for param in bool_parameters:
             if param in parameters:
                 try:
@@ -637,11 +639,7 @@ class PowerPointReport():
 
         # get page count
         pages = doc.page_count
-        # span array over all available pages e.g. pages 3 transforms to [1,2,3]
-        pages = [i + 1 for i in range(pages)]
-
-        if pdf_pages is None:
-            raise IndexError(f"Index {pdf_pages} no valid Index.")
+        pages = [i + 1 for i in range(pages)]  # span array over all available pages e.g. pages 3 transforms to [1,2,3]
 
         # Convert pdf_pages to list
         try:
@@ -790,8 +788,6 @@ class PowerPointReport():
 
         # Establish content
         content = parameters.get("content", [])
-        if not isinstance(content, list):
-            content = [content]
 
         # Expand content files
         content = self._expand_files(content, missing_file=parameters["missing_file"], empty_slide=parameters["empty_slide"])
@@ -938,26 +934,6 @@ class PowerPointReport():
         return content_per_group
 
     # ------------------------------------------------------------------------ #
-    # --------------------- Additional elements on slides -------------------- #
-    # ------------------------------------------------------------------------ #
-
-    def add_borders(self):
-        """ Add borders of all content boxes. Useful for debugging layouts."""
-
-        for slide in self._slides:
-            if hasattr(slide, "_boxes"):
-                for box in slide._boxes:
-                    box.add_border()
-
-    def remove_borders(self):
-        """ Remove borders (is there are any) of all content boxes. """
-
-        for slide in self._slides:
-            if hasattr(slide, "_boxes"):
-                for box in slide._boxes:
-                    box.remove_border()
-
-    # ------------------------------------------------------------------------ #
     # --------------------- Saving / loading presentations ---------------------
     # ------------------------------------------------------------------------ #
 
@@ -1085,22 +1061,17 @@ class PowerPointReport():
         for slide_dict in config["slides"]:
             self.add_slide(**slide_dict)  # add all options from slide config
 
-    def save(self, filename, show_borders=False, pdf=False):
+    def save(self, filename, pdf=False):
         """
         Save the presentation to a file.
 
         Parameters
         ----------
         filename : str
-            Filename of the presentation.
-        show_borders : bool, default False
-            Show borders of the content boxes. Is useful for debugging layouts.
+            Filename of the presentation, e.g. "my_presentation.pptx".
         pdf : bool, default False
             Additionally save the presentation as a pdf file with the same basename as <filename>.
         """
-
-        if show_borders is True:
-            self.add_borders()
 
         self.logger.info("Saving presentation to '" + filename + "'")
 
@@ -1113,10 +1084,6 @@ class PowerPointReport():
         # Save presentation as pdf
         if pdf:
             self._save_pdf(filename)
-
-        # Remove borders again
-        if show_borders is True:
-            self.remove_borders()  # Remove borders again
 
     # not included in tests due to libreoffice dependency
     def _save_pdf(self, filename):  # pragma: no cover

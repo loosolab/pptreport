@@ -69,21 +69,6 @@ def test_get_config_global():
         assert key not in config["slides"][1]
 
 
-def test_borders():
-    """ Test that borders of boxes can be added and removed from all slides"""
-
-    report = PowerPointReport()
-    report.add_slide("A text")
-
-    # Add borders
-    report.add_borders()
-    assert report._slides[0]._boxes[0].border is not None
-
-    # Remove borders
-    report.remove_borders()
-    assert report._slides[0]._boxes[0].border is None
-
-
 @pytest.mark.parametrize("content", ["examples/content/fish_description.txt",
                                      "examples/content/fish_description.md",
                                      "examples/content/cat.jpg",

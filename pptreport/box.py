@@ -138,16 +138,10 @@ class Box():
 
         if self.border is None:
             self.border = self.slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, self.left, self.top, self.width, self.height)
+            self.border.shadow.inherit = False  # remove shadow
             self.border.fill.background()
             self.border.line.color.rgb = RGBColor(0, 0, 0)  # black
             self.border.line.width = Pt(1)
-
-    def remove_border(self):
-        """ Removes the border shape """
-
-        if self.border is not None:
-            self.border._sp.getparent().remove(self.border._sp)
-            self.border = None  # reset border
 
     @staticmethod
     def _get_content_type(content):
@@ -286,7 +280,7 @@ class Box():
             new_width = int(new_height * image_ratio)
             self.logger.warning(f"Image '{filename}' is larger than max_pixels={max_pixels} ({im_height}*{im_width}={image_pixels}). Adjust 'max_pixels' to skip resizing. Resizing to size {new_height}*{new_width}...")
 
-            im = im.resize((new_width, new_height), Image.ANTIALIAS)
+            im = im.resize((new_width, new_height), Image.LANCZOS)
 
             # Create temporary file
             temp_name = next(tempfile._get_candidate_names()) + ".png"

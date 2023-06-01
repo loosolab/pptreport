@@ -12,7 +12,7 @@ class Slide():
     def __init__(self, slide, parameters={}):
 
         self._slide = slide  # Slide object from python-pptx
-        self._boxes = []     # Boxes in the slide
+        self._boxes = {}     # Boxes in the slide; indexed by box id (int)
         self.logger = None
 
         self.add_parameters(parameters)
@@ -75,7 +75,7 @@ class Slide():
             elif layout == "horizontal":
                 layout_matrix = np.array(list(range(n_elements))).reshape((1, n_elements))
             else:
-                raise ValueError(f"Unknown layout string: '{layout}'. Please use 'grid', 'vertical' or 'horizontal', or a custom matrix.")
+                raise ValueError(f"Invalid value for 'content_layout' parameter: '{layout}'. Please use 'grid', 'vertical' or 'horizontal', or a custom matrix.")
 
         else:  # layout is expected to be a matrix
             layout_matrix = self._validate_layout(layout)  # check if layout is a valid matrix
@@ -134,20 +134,47 @@ class Slide():
             if any([v <= 0 for v in value]):
                 raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please use a list of positive values.")
 
-    @staticmethod
-    def _validate_layout(layout_matrix):
+    def _validate_layout(self, layout_matrix):
         """ Validate the given layout matrix. """
-        # TODO: check if layout is a valid matrix
 
         try:
             with warnings.catch_warnings():
                 warnings.filterwarnings("error", category=VisibleDeprecationWarning, message="Creating an ndarray from ragged nested*")
                 layout_matrix = np.array(layout_matrix)
         except VisibleDeprecationWarning:
-            raise ValueError("The given layout matrix is not valid. Please make sure that all rows have the same length.")
+            raise ValueError(f"Invalid value for 'content_layout' parameter: '{layout_matrix}'. Please make sure that all rows have the same length.")
+        except Exception as e:
+            raise ValueError(f"Invalid value for 'content_layout' parameter: '{layout_matrix}'. Please make sure that all rows have the same length. Error was: {e}")
 
         if len(layout_matrix.shape) == 1:
             layout_matrix = layout_matrix.reshape((1, len(layout_matrix)))  # convert to 2D array
+
+        # Make sure that all values are integers
+        try:
+            layout_matrix = layout_matrix.astype(int)
+        except Exception:
+            layout_matrix_string = str(layout_matrix).replace('\n', '')  # do not cut numpy array with newlines in error message
+            raise ValueError(f"Invalid value for 'content_layout' parameter: '{layout_matrix_string}'. Please use an array of integers.")
+
+        # Check that all values are above -1
+        if np.any(layout_matrix < -1):
+            layout_matrix_string = str(layout_matrix).replace('\n', '')  # do not cut numpy array with newlines in error message
+            raise ValueError(f"Invalid value for 'content_layout' parameter: '{layout_matrix_string}'. Please use an array of integers above -1.")
+
+        # Test that values fit the number of elements
+        n_elements = len(self.content)
+        content_indices = list(range(n_elements))
+        unique_layout_indices = np.unique(layout_matrix)
+
+        # Check that all values in layout_matrix are in content_indices and vice versa
+        extra_layout_indices = [i for i in unique_layout_indices if i not in content_indices]
+        if len(extra_layout_indices) > 0:
+            self.logger.warning(f"The layout matrix contains indices that are outside the indices in content (max index = {n_elements-1}): {extra_layout_indices}. These additional content boxes will be empty.")
+
+        missing_layout_indices = [i for i in content_indices if i not in unique_layout_indices]
+        if len(missing_layout_indices) > 0:
+            content_missing = [self.content[i] for i in missing_layout_indices]
+            self.logger.warning(f"Content contains {n_elements} elements, but the content_layout is missing the indices: {missing_layout_indices}. The following contents will not be shown: {content_missing}")
 
         return layout_matrix
 
@@ -299,15 +326,18 @@ class Slide():
             width += (len(cols) - 1) * inner_margin_unit  # add inner margins between columns
 
             #  Create box
-            box = self.add_box((left, top, width, height))
+            box = self.get_box((left, top, width, height))
 
             # Add original filename for the content
             if i < len(self._filenames):  # if i == 2, and number of filenames is 2, index 2 is out of range. Happens if there are empty boxes
                 box._filename = self._filenames[i]
 
-    def add_box(self, coordinates):
+            # Add box to dict of boxes
+            self._boxes[i] = box
+
+    def get_box(self, coordinates):
         """
-        Add a box to the slide.
+        Get a box object with the given coordinates.
 
         Parameters
         ----------
@@ -323,8 +353,9 @@ class Slide():
         parameters = {key: getattr(self, key) for key in keys}
         box.add_parameters(parameters)
 
-        # Add box object to list
-        self._boxes.append(box)
+        # If show_borders is True for slide
+        if self.show_borders:
+            box.add_border()
 
         return box
 
@@ -332,7 +363,8 @@ class Slide():
         """ Fill the boxes with the elements in self.content """
 
         for i, element in enumerate(self.content):
-            self._boxes[i].fill(element, box_index=i)
+            if i in self._boxes:  # if there is a box for the element; in custom layouts there can be missing boxes
+                self._boxes[i].fill(element, box_index=i)
 
     def remove_empty_ph(self):
         """ Remove empty placeholders from the slide. """

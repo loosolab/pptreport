@@ -124,23 +124,18 @@ def test_slide_layout(slide_layout, valid):
                                             ("horizontal", True),
                                             ([0, 1, 2], True),
                                             ([[0, 1], [2, 3]], True),
+                                            ([["0", "1"], ["2", "3"]], True),
+                                            ([[0, 0], [0, 0]], True),     # more content than numbers in layout; will limit content and write a warning
+                                            ([[5, 5], [6, 6]], True),     # more indexes in layout than content; will write a warning
+                                            ([["astring", 1], [1, 1]], False),  # right size but invalid type
+                                            ([[-2, 1], [1, 1]], False),   # right size and type but -2 is not valid
                                             ("invalid", False),           # invalid string
                                             ([[0, 1, 2], [3, 4]], False)  # inconsistent number of columns
                                             ])
 def test_content_layout(content, valid):
     """ Test that content layout is correctly validated """
-
-    report = PowerPointReport()
-
-    if valid:
-        report.add_slide("A text", content_layout=content)
-    else:
-        if isinstance(content, str):
-            with pytest.raises(ValueError, match="Unknown layout string:"):
-                report.add_slide("A text", content_layout=content)
-        else:
-            with pytest.raises(ValueError):
-                report.add_slide("A text", content_layout=content)
+    config = {"content_layout": content}
+    validate(config, valid)
 
 
 # ------------------------------------------------------------------- #
@@ -165,6 +160,7 @@ def test_content_alignment(content_alignment, valid):
                          [(0.1, True),
                           ("1", True),
                           (0, True),
+                          ("1cm", False),
                           (-2, False)])
 def test_margins_input(margins, valid, parameter):
 
@@ -376,6 +372,19 @@ def test_integers(value, valid, parameter):
 def test_max_pixels_input(value, valid):
     config = {"max_pixels": value}
     validate(config, valid, match="Invalid value for 'max_pixels' parameter")
+
+
+# ------------------------------------------------------------------- #
+# show_borders
+@pytest.mark.parametrize("value, valid",
+                         [(True, True),
+                          (False, True),
+                          ("invalid", False)])
+def test_show_borders(value, valid):
+    """ Test that borders are correctly set """
+
+    config = {"show_borders": value}
+    validate(config, valid, match="Invalid value for 'show_borders' parameter")
 
 
 # ------------------------------------------------------------------- #

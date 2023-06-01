@@ -14,7 +14,6 @@ def main():
     # Set options
     dpi = 100
     content_dir = "../../examples/content"
-    template = "../../examples/template.pptx"
 
     ##################################################
     # Run all examples
@@ -25,7 +24,6 @@ def main():
     thumbs_files = glob.glob("examples/**/Thumbs.db", recursive=True)
     for thumbs_file in thumbs_files:
         os.remove(thumbs_file)  # remove thumbs files from copied content folder
-    shutil.copyfile(template, "examples/content/template.pptx")
 
     # zip content folder
     cmd = "cd examples; zip -r content.zip content"

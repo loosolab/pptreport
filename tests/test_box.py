@@ -42,3 +42,16 @@ def test_set_fontsize(fontsize):
     else:
         report.add_slide([text], fontsize=fontsize)
         assert len(report._slides) == 1
+
+
+@pytest.mark.parametrize("show_borders", [True, False])
+def test_borders(show_borders):
+    """ Test that borders of boxes are added """
+
+    report = PowerPointReport()
+    report.add_slide("A text", show_borders=show_borders)
+
+    if show_borders is True:
+        assert report._slides[0]._boxes[0].border is not None
+    else:
+        assert report._slides[0]._boxes[0].border is None
