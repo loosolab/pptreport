@@ -144,7 +144,10 @@ def test_content_layout(content, valid):
                          [("left", True),
                           ("center", True),
                           ("right", True),
+                          ("upper", True),  # upper center
+                          ("lower", True),  # lower center
                           ("center right", True),
+                          (["left", "center"], True),
                           ("upper wherever", False),
                           ("invalid", False),
                           (0, False)])
@@ -242,12 +245,12 @@ def test_show_filename_input(show_filename, valid):
                           ("center", True),
                           ("right", True),
                           ("RIGHT", True),
-                          ("right ", True),
+                          (["right", "left"], True),
                           ("center right", False),
                           ("invalid", False),
                           (0, False)])
 def test_filename_alignment(filename_alignment, valid):
-    config = {"filename_alignment": filename_alignment, "show_filename": True}
+    config = {"filename_alignment": filename_alignment, "content_alignment": "left", "show_filename": True}  # bounds of filename is dependent on content_alignment (!=center is handled differently)
     validate(config, valid, "Invalid value for 'filename_alignment'")
 
 
@@ -379,6 +382,7 @@ def test_max_pixels_input(value, valid):
 @pytest.mark.parametrize("value, valid",
                          [(True, True),
                           (False, True),
+                          (1, True),  # 1 counts as True
                           ("invalid", False)])
 def test_show_borders(value, valid):
     """ Test that borders are correctly set """

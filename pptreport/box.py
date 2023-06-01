@@ -193,13 +193,15 @@ class Box():
                 text_top = self.top
                 self.height = full_height - text_height
                 self.top = self.top + text_height
+
             self.fill_image(content)
 
+            # Resize to add filename
             if self.show_filename is not False:
-                self.height = text_height
+                self.height = text_height  # overwrite height
                 self.top = text_top
-                vertical, horizontal = self._get_content_alignment()
-                if horizontal != "center":
+                _, horizontal = self._get_content_alignment()
+                if horizontal != "center":  # make sure text is placed within the picture width, and not the box width, in case alignment is left / right
                     self.left = self.picture.left
                     self.width = self.picture.width
 
@@ -268,7 +270,12 @@ class Box():
         if max_pixels < 4:
             raise ValueError("Invalid value for 'max_pixels' parameter: '{max_pixels}'. Please use an integer higher than 4.")
 
-        im = Image.open(filename)
+        # Check if image can be opened
+        try:
+            im = Image.open(filename)
+        except Exception as e:
+            raise ValueError(f"Could not open image file '{filename}'. Error was: {e}")
+
         im_width, im_height = im.size
         image_pixels = im_width * im_height
 

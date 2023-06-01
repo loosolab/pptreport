@@ -129,7 +129,7 @@ class PowerPointReport():
         "pdf_pages": "all",
         "missing_file": "raise",
         "dpi": 300,
-        "max_pixels": 1e8,
+        "max_pixels": 1e7,
         "empty_slide": "keep",
         "show_borders": False,
     }
@@ -486,7 +486,7 @@ class PowerPointReport():
             - "skip": slides without any content will not be added to the presentation
         dpi : int, default 300
             Dots per inch of the image. Only used when converting pdf to image.
-        max_pixels : int, default 1e8
+        max_pixels : int, default 1e7
             Maximum number of pixels in an image. If an image has more pixels than this, it will be resized.
         """
 
@@ -635,7 +635,7 @@ class PowerPointReport():
         try:
             doc = fitz.open(pdf)
         except Exception as e:
-            raise ValueError(f"Could not open pdf file {pdf}. Error was: {e}")
+            raise ValueError(f"Could not open .pdf file: {pdf}. Error was: {e}")
 
         # get page count
         pages = doc.page_count

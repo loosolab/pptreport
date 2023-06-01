@@ -1,5 +1,7 @@
 from pptreport import PowerPointReport
 import pytest
+import shutil
+import os
 
 content_dir = "examples/content/"
 
@@ -55,3 +57,23 @@ def test_borders(show_borders):
         assert report._slides[0]._boxes[0].border is not None
     else:
         assert report._slides[0]._boxes[0].border is None
+
+
+@pytest.mark.parametrize("content", [content_dir + "wrong_extension.pdf",
+                                     content_dir + "wrong_extension.jpg"])
+def test_content_fill(content):
+    """ Test that contents with false extensions are correctly identified """
+
+    report = PowerPointReport()
+
+    # Create copy of picture to .pdf and vice versa for testing
+    if os.path.splitext(content)[-1] == ".pdf":
+        shutil.copyfile(content_dir + "cat.jpg", content)
+    elif os.path.splitext(content)[-1] == ".jpg":
+        shutil.copyfile(content_dir + "chips.pdf", content)
+
+    with pytest.raises(ValueError, match="Could not open"):
+        report.add_slide(content=content)
+
+    # Clean up
+    os.remove(content)

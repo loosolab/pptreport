@@ -43,5 +43,6 @@ def test_commandline():
     assert data1 == data2
 
     # Clean up
-    os.remove("test.pptx")
+    os.remove("test_CLI.pptx")
+    os.remove("test_API.pptx")
     os.remove("test_config.json")
