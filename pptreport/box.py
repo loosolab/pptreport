@@ -163,7 +163,7 @@ class Box():
             return "empty"
         else:
             t = type(content)
-            raise ValueError(f"Content of type '{t}' cannot be added to slide")
+            return t.__name__
 
     def fill(self, content, box_index=0):
         """
@@ -232,7 +232,7 @@ class Box():
         elif content_type == "empty":
             return  # do nothing
         else:
-            pass
+            raise ValueError(f"Content of type '{content_type}' is not supported by pptreport and cannot be added to slide.")
 
         self.logger.debug(f"Box index {box_index} was filled with {content_type}")
 

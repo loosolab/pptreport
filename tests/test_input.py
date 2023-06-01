@@ -45,6 +45,21 @@ def test_verbosity(verbosity, valid):
             _ = PowerPointReport(verbosity=verbosity)
 
 
+@pytest.mark.parametrize("global_parameters, valid",
+                         [({"outer_margin": 2}, True),
+                          ({"not_valid": 2}, False),
+                          (["alist"], False)  # must be dict
+                          ])
+def test_global_parameters(global_parameters, valid):
+    """ Test that global parameters are validated correctly """
+    report = PowerPointReport()
+    if valid:
+        report.add_global_parameters(global_parameters)
+    else:
+        with pytest.raises((ValueError, TypeError)):
+            report.add_global_parameters(global_parameters)
+
+
 #####################################################################
 # Tests for input to .add_slide
 #####################################################################
@@ -58,11 +73,22 @@ def validate(config, valid, match="Invalid value for "):
     if valid:
         report.add_slide(**default_config)
     else:
-        with pytest.raises((ValueError, TypeError, IndexError), match=match) as e:
+        with pytest.raises((ValueError, TypeError, IndexError), match=match):
             report.add_slide(**default_config)
 
-        print(f"Configuration {config} failed with error: {e.value}\n")
+# ------------------------------------------------------------------- #
+@pytest.mark.parametrize("content, valid",
+                         [(content_dir + "colored_animals/(.*)_blue.jpg", True),
+                          (content_dir + "colored_animals/([*)_blue.jpg", False)])
+def test_regex_input(content, valid):
+    config = {"content": content}
 
+    report = PowerPointReport()
+    if valid:
+        report.add_slide(**config)
+    else:
+        with pytest.raises(ValueError, match="Invalid regex"):
+            report.add_slide(**config)
 
 # ------------------------------------------------------------------- #
 @pytest.mark.parametrize("content, valid",
@@ -78,7 +104,8 @@ def test_content_input(content, valid):
 # ------------------------------------------------------------------- #
 # grouped content
 @pytest.mark.parametrize("grouped_content, valid",
-                         [(["no", "groups"], False),
+                         [(["string", content_dir + "colored_animals/(.*)_blue.jpg", content_dir + "colored_animals/(.*)_blue.jpg"], True),
+                          (["no", "groups"], False),
                           ("A text", False)])
 def test_grouped_content(grouped_content, valid):
     config = {"content": None, "grouped_content": grouped_content}
@@ -368,7 +395,6 @@ def test_integers(value, valid, parameter):
                           (4, True),
                           (1, False),
                           ("2", False),
-                          (0, False),
                           (-1, False),
                           ("invalid", False),
                           (False, False)])
@@ -382,7 +408,7 @@ def test_max_pixels_input(value, valid):
 @pytest.mark.parametrize("value, valid",
                          [(True, True),
                           (False, True),
-                          (1, True),  # 1 counts as True
+                          (1, False),  # not bool
                           ("invalid", False)])
 def test_show_borders(value, valid):
     """ Test that borders are correctly set """

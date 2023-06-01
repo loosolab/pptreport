@@ -8,7 +8,6 @@ import logging
 import sys
 import tempfile
 import fitz
-import numbers
 from natsort import natsorted
 
 # Pptx modules
@@ -60,18 +59,11 @@ def _convert_to_bool(value):
         return value
 
     elif isinstance(value, str):
-        if value.lower() in ["true", "1", "t", "y", "yes"]:
+        if value.lower() in ["true", "t", "y", "yes"]:
             return True
-        elif value.lower() in ["false", "0", "f", "n", "no"]:
+        elif value.lower() in ["false", "f", "n", "no"]:
             return False
         else:
-            raise ValueError(error_message)
-
-    elif isinstance(value, numbers.Number):
-        try:
-            converted = bool(value)  # can convert 1 to True and 0 to False
-            return converted
-        except Exception:
             raise ValueError(error_message)
     else:
         raise ValueError(error_message)
@@ -222,7 +214,7 @@ class PowerPointReport():
 
         # Test that parameters is a dict
         if not isinstance(parameters, dict):
-            raise TypeError("Parameters must be a dict.")
+            raise TypeError(f"Global parameters must be a dictionary. Value given was: {parameters}")
 
         # Save parameters to self
         self.global_parameters = parameters  # for writing to config file
@@ -230,7 +222,7 @@ class PowerPointReport():
         # Overwrite default parameters
         for k, v in parameters.items():
             if k not in self._default_slide_parameters:
-                raise ValueError(f"Parameter '{k}' is not a valid parameter for slide.")
+                raise ValueError(f"Parameter '{k}' from global parameters is not a valid parameter for slide. Valid parameters are: {list(self._default_slide_parameters.keys())}")
             else:
                 self._default_slide_parameters[k] = v
 
@@ -337,7 +329,7 @@ class PowerPointReport():
                     except ValueError:
                         raise ValueError(f"Invalid value for 'split' parameter: {parameters['split']}. Must be an integer >= 1 or true/false.")
 
-            if not isinstance(parameters["split"], bool) and parameters["split"] < 1:  # if value is not bool, it is integer
+            if not isinstance(parameters["split"], bool) and parameters["split"] < 1:
                 raise ValueError(f"Invalid value for 'split' parameter: {parameters['split']}. Integer must be >= 1.")
 
         # Format other purely boolean parameters to bool
@@ -371,12 +363,10 @@ class PowerPointReport():
 
         # Validate missing_file
         if "missing_file" in parameters:
-            if not isinstance(parameters["missing_file"], str):
-                raise TypeError("Invalid value for 'missing_file' - must be either 'raise', 'empty', 'text' or 'skip'.")
-            else:
-                parameters["missing_file"] = parameters["missing_file"].lower()
-                if parameters["missing_file"] not in ["raise", "empty", "text", "skip"]:
-                    raise ValueError(f"Invalid value for 'missing_file' parameter: '{parameters['missing_file']}'. Must be either 'raise', 'empty', 'text' or 'skip'.")
+            parameters["missing_file"] = str(parameters["missing_file"]).lower()
+            if parameters["missing_file"] not in ["raise", "empty", "text", "skip"]:
+                raise ValueError(f"Invalid value for 'missing_file' parameter: '{parameters['missing_file']}'. Must be either 'raise', 'empty', 'text' or 'skip'.")
+
 
         # --- Validate input combinations --- #
 
@@ -716,17 +706,16 @@ class PowerPointReport():
         for element in lst:
 
             files_found = []   # names of files found for this element
-            element = str(element) if element is not None else element  # convert to string, e.g. if input was an int
 
             # If the number of words in element is 1, it could be a file
-            if element is not None and len(element.split()) == 1:
+            if element is not None and len(str(element).split()) == 1:
 
+                element = str(element)  # convert to string, e.g. if element was an int
                 element = element.rstrip().lstrip()  # remove trailing and leading spaces to avoid problems with globbing
 
                 # Try to glob files with unix globbing
-                if element is not None:
-                    globbed = glob.glob(element)
-                    files_found.extend(globbed)
+                globbed = glob.glob(element)
+                files_found.extend(globbed)
 
                 # If no files were found by globbing, try to find files by regex
                 if len(files_found) == 0:
@@ -752,7 +741,7 @@ class PowerPointReport():
                     elif missing_file == "skip":
                         self.logger.warning(f"No files could be found for pattern: '{element}'. Skipping this file on the slide.")
                     else:
-                        raise ValueError(f"Unknown value for 'missing_file': '{missing_file}'")
+                        raise ValueError(f"Invalid value for 'missing_file' parameter: '{missing_file}'. Must be either 'raise', 'empty', 'text' or 'skip'.")
 
                 elif len(files_found) > 0:
                     n_patterns_found += 1
@@ -822,12 +811,8 @@ class PowerPointReport():
             content = [content]
             filenames = [filenames]
         else:
-            if len(content) == 0:
-                raise ValueError("Invalid input combination. Split is True, but 'content' is empty.")
-            else:
-                if isinstance(parameters["split"], int):
-                    content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
-                    filenames = [filenames[i:i + parameters["split"]] for i in range(0, len(filenames), parameters["split"])]
+            content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
+            filenames = [filenames[i:i + parameters["split"]] for i in range(0, len(filenames), parameters["split"])]
 
         return content, filenames, tmp_files
 
@@ -1041,14 +1026,11 @@ class PowerPointReport():
                 except Exception as e:
                     raise ValueError("Could not load config file from {}. The error was: {}".format(config, e))
 
-        # Set upper attributes
+        # Set upper presentation attributes
         upper_keys = config.keys()
         for key in upper_keys:
             if key != "slides":
                 setattr(self, key, config[key])
-
-                if key == "split":
-                    self.split = bool(config[key])  # convert input string to bool
 
         # Initialize presentation
         self._initialize_presentation()

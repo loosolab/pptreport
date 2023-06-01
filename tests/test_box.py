@@ -1,4 +1,5 @@
 from pptreport import PowerPointReport
+import pandas as pd
 import pytest
 import shutil
 import os
@@ -77,3 +78,12 @@ def test_content_fill(content):
 
     # Clean up
     os.remove(content)
+
+
+@pytest.mark.parametrize("content", [pd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})])
+def test_invalid_content_type(content):
+    """ Test input of invalid content types """
+
+    report = PowerPointReport()
+    with pytest.raises(ValueError):
+        report.add_slide(content=content)
