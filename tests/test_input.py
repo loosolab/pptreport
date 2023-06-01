@@ -76,6 +76,7 @@ def validate(config, valid, match="Invalid value for "):
         with pytest.raises((ValueError, TypeError, IndexError), match=match):
             report.add_slide(**default_config)
 
+
 # ------------------------------------------------------------------- #
 @pytest.mark.parametrize("content, valid",
                          [(content_dir + "colored_animals/(.*)_blue.jpg", True),
@@ -89,6 +90,7 @@ def test_regex_input(content, valid):
     else:
         with pytest.raises(ValueError, match="Invalid regex"):
             report.add_slide(**config)
+
 
 # ------------------------------------------------------------------- #
 @pytest.mark.parametrize("content, valid",

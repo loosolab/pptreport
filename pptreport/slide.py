@@ -141,8 +141,6 @@ class Slide():
             with warnings.catch_warnings():
                 warnings.filterwarnings("error", category=VisibleDeprecationWarning, message="Creating an ndarray from ragged nested*")
                 layout_matrix = np.array(layout_matrix)
-        except VisibleDeprecationWarning:
-            raise ValueError(f"Invalid value for 'content_layout' parameter: '{layout_matrix}'. Please make sure that all rows have the same length.")
         except Exception as e:
             raise ValueError(f"Invalid value for 'content_layout' parameter: '{layout_matrix}'. Please make sure that all rows have the same length. Error was: {e}")
 
