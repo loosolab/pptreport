@@ -56,11 +56,12 @@ def estimate_fontsize(txt_frame, min_size=6, max_size=18, logger=None):
     except TypeError:  # happens with long filenames, which cannot fit on one line
 
         # Try fitting by splitting long words; decrease length if TextFitter still fails
+        original_text = text[:]
         max_word_len = 20
         while True:
             if max_word_len < 5:
                 if logger is not None:
-                    logger.warning(f"Could not fit text '{text}' in textbox. Setting fontsize to {min_size}.")
+                    logger.warning(f"Could not fit text '{original_text}' in textbox. Setting fontsize to {min_size}.")
                 break  # give up; set text to smallest size
             try:
                 words = text.split(" ")
