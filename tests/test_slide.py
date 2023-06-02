@@ -54,3 +54,12 @@ def test_show_filename(show_filename, expected):
 
     else:
         assert len(slide._slide.shapes) == 1
+
+
+@pytest.mark.parametrize("config", [{"left_margin": 50}, {"top_margin": 50}])
+def test_large_margins(config):
+    """ Check that large margins throw an error correctls """
+
+    report = PowerPointReport()
+    with pytest.raises(ValueError, match="The .+ of content is negative."):
+        report.add_slide(content_dir + "cat.jpg", **config)

@@ -126,9 +126,12 @@ class PowerPointReport():
         "show_borders": False,
     }
 
-    valid_options = {
+    _valid_slide_parameters = ["content", "grouped_content"] + list(_default_slide_parameters.keys())
+
+    _valid_options = {
         "fill_by": ["row", "column"],
-        "missing_file": ["raise", "ignore", "skip"],
+        "missing_file": ["raise", "empty", "text", "skip"],
+        "show_filename": ["filename", "filename_ext", "filepath", "filepath_ext", "path"]
     }
 
     def __init__(self, template=None, size="standard", verbosity=0):
@@ -221,8 +224,8 @@ class PowerPointReport():
 
         # Overwrite default parameters
         for k, v in parameters.items():
-            if k not in self._default_slide_parameters:
-                raise ValueError(f"Parameter '{k}' from global parameters is not a valid parameter for slide. Valid parameters are: {list(self._default_slide_parameters.keys())}")
+            if k not in self._valid_slide_parameters:
+                raise ValueError(f"Parameter '{k}' from global parameters is not a valid parameter for slide. Valid parameters are: {self._valid_slide_parameters}")
             else:
                 self._default_slide_parameters[k] = v
 
@@ -236,7 +239,7 @@ class PowerPointReport():
         self._config_dict["global_parameters"] = parameters
 
     def _add_to_config(self, parameters):
-        """ Add the slide parameters to the config file.
+        """ Add the slide parameters to the config file. Also checks that the parameters are valid.
 
         Parameters
         ----------
@@ -347,7 +350,7 @@ class PowerPointReport():
             try:
                 parameters["show_filename"] = _convert_to_bool(value)
             except Exception:  # if the value is not a bool, it should be a string
-                valid = ["filename", "filename_ext", "filepath", "filepath_ext", "path"]
+                valid = self._valid_options["show_filename"]
                 if isinstance(value, str):
                     if value not in valid:
                         raise ValueError(f"Invalid value for 'show_filename' parameter: '{value}'. Please use one of the following: {valid}")
@@ -364,8 +367,8 @@ class PowerPointReport():
         # Validate missing_file
         if "missing_file" in parameters:
             parameters["missing_file"] = str(parameters["missing_file"]).lower()
-            if parameters["missing_file"] not in ["raise", "empty", "text", "skip"]:
-                raise ValueError(f"Invalid value for 'missing_file' parameter: '{parameters['missing_file']}'. Must be either 'raise', 'empty', 'text' or 'skip'.")
+            if parameters["missing_file"] not in self._valid_options["missing_file"]:
+                raise ValueError(f"Invalid value for 'missing_file' parameter: '{parameters['missing_file']}'. Must be one of: {self._valid_options['missing_file']}")
 
         # --- Validate input combinations --- #
 
@@ -486,6 +489,9 @@ class PowerPointReport():
         parameters["content"] = content
         parameters.update(kwargs)
         parameters = {k: v for k, v in parameters.items() if v is not None}
+        for param in parameters:
+            if param not in self._valid_slide_parameters:
+                raise ValueError(f"Invalid parameter '{param}' given for slide. Valid parameters are: {self._valid_slide_parameters}")
         self._add_to_config(parameters)
         self.logger.debug(f"Input parameters: {parameters}")
 

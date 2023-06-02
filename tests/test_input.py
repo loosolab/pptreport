@@ -78,6 +78,14 @@ def validate(config, valid, match="Invalid value for "):
 
 
 # ------------------------------------------------------------------- #
+def test_invalid_params():
+    """ Test that invalid parameters are caught """
+    report = PowerPointReport()
+    with pytest.raises(ValueError, match="Invalid parameter .+ given for slide"):
+        report.add_slide(invalid_param="invalid")
+
+
+# ------------------------------------------------------------------- #
 @pytest.mark.parametrize("content, valid",
                          [(content_dir + "colored_animals/(.*)_blue.jpg", True),
                           (content_dir + "colored_animals/([*)_blue.jpg", False)])
@@ -211,6 +219,7 @@ def test_margins_input(margins, valid, parameter):
                           ([1, 2, 3, 5, 6], True),  # too many ratios
                           ([1], True),  # too few ratios
                           ([0, 1], False),  # ratio cannot be 0
+                          ("1 2 3", False),  # string cannot be converted to list
                           ([], False),  # No ratios
                           ([0, -2], False),
                           (False, False),
