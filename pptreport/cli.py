@@ -13,7 +13,7 @@ def main():
     parser.add_argument("--template", metavar="<path>", help="Path to template ppt file (optional). Will overwrite any template specified in config file.")
     parser.add_argument("--pdf", help="Additionally save the presentation as a .pdf with the same basename as --output. Requires 'Libreoffice' to be installed on path (Default: False).", action='store_true', default=False)
     parser.add_argument("--show-borders", help="Show borders around all elements in the presentation. Good for debugging layouts (Default: False).", action='store_true', default=False)
-    parser.add_argument("--verbosity", metavar="0/1/2", help="Verbosity level for logging (0-2). 0 = only errors, 1 = minimal logging, 2 = debug logging (Default: 1).", type=int, default=1)
+    parser.add_argument("--verbosity", metavar="0/1/2", help="Verbosity level for logging (0-2). 0 = only errors and warnings, 1 = minimal logging, 2 = debug logging (Default: 1).", type=int, default=1)
     parser.add_argument("--version", action="version", version=pptreport_version)
 
     # If no args, print help
@@ -36,11 +36,17 @@ def main():
     if args.template:
         config_dict["template"] = args.template
 
+    # If global show_borders was given, overwrite config
+    if args.show_borders:
+        if "global_parameters" not in config_dict:
+            config_dict["global_parameters"] = {}
+        config_dict["global_parameters"]["show_borders"] = args.show_borders
+
     # Create report using PowerPointReport class
     report = PowerPointReport(verbosity=args.verbosity)
     try:
         report.from_config(config_dict)
-        report.save(args.output, show_borders=args.show_borders, pdf=args.pdf)
+        report.save(args.output, pdf=args.pdf)
 
     except Exception as e:
         report.logger.error(e)  # show exception

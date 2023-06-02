@@ -53,23 +53,20 @@ def _replace_quotes(string):
 def _convert_to_bool(value):
     """ Convert a value to a boolean type. """
 
-    if isinstance(value, bool):
+    error_message = f"Could not convert string '{value}' to a boolean value."
+
+    if isinstance(value, bool):  # value is already bool
         return value
 
-    if isinstance(value, str):
-        if value.lower() in ["true", "1", "t", "y", "yes"]:
+    elif isinstance(value, str):
+        if value.lower() in ["true", "t", "y", "yes"]:
             return True
-        elif value.lower() in ["false", "0", "f", "n", "no"]:
+        elif value.lower() in ["false", "f", "n", "no"]:
             return False
         else:
-            raise ValueError(f"Could not convert string '{value}' to a boolean value.")
-
+            raise ValueError(error_message)
     else:
-        try:
-            converted = bool(value)  # can convert 1 to True and 0 to False
-            return converted
-        except Exception:
-            raise ValueError(f"Could not convert '{value}' to a boolean value.")
+        raise ValueError(error_message)
 
 
 def _looks_like_filename(string):
@@ -124,8 +121,17 @@ class PowerPointReport():
         "pdf_pages": "all",
         "missing_file": "raise",
         "dpi": 300,
-        "max_pixels": 1e8,
-        "empty_slide": "keep"
+        "max_pixels": 1e7,
+        "empty_slide": "keep",
+        "show_borders": False,
+    }
+
+    _valid_slide_parameters = ["content", "grouped_content"] + list(_default_slide_parameters.keys())
+
+    _valid_options = {
+        "fill_by": ["row", "column"],
+        "missing_file": ["raise", "empty", "text", "skip"],
+        "show_filename": ["filename", "filename_ext", "filepath", "filepath_ext", "path"]
     }
 
     def __init__(self, template=None, size="standard", verbosity=0):
@@ -157,6 +163,13 @@ class PowerPointReport():
         """
 
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.handlers = []  # remove any existing handlers
+
+        # Test if verbosity is an integer
+        try:
+            verbosity = int(str(verbosity))  # if verbosity is a bool, converting to str raises an error
+        except Exception:
+            raise ValueError(f"Verbosity must be an integer - the given value is '{verbosity}'")
 
         # Setup formatting of handler
         H = logging.StreamHandler(sys.stdout)
@@ -165,7 +178,7 @@ class PowerPointReport():
 
         # Set verbosity and formatting
         if verbosity == 0:
-            self.logger.setLevel(logging.ERROR)
+            self.logger.setLevel(logging.WARNING)
             H.setFormatter(simple_formatter)
         elif verbosity == 1:
             self.logger.setLevel(logging.INFO)
@@ -204,15 +217,15 @@ class PowerPointReport():
 
         # Test that parameters is a dict
         if not isinstance(parameters, dict):
-            raise TypeError("Parameters must be a dict.")
+            raise TypeError(f"Global parameters must be a dictionary. Value given was: {parameters}")
 
         # Save parameters to self
         self.global_parameters = parameters  # for writing to config file
 
         # Overwrite default parameters
         for k, v in parameters.items():
-            if k not in self._default_slide_parameters:
-                raise ValueError(f"Parameter '{k}' is not a valid parameter for slide.")
+            if k not in self._valid_slide_parameters:
+                raise ValueError(f"Parameter '{k}' from global parameters is not a valid parameter for slide. Valid parameters are: {self._valid_slide_parameters}")
             else:
                 self._default_slide_parameters[k] = v
 
@@ -226,7 +239,7 @@ class PowerPointReport():
         self._config_dict["global_parameters"] = parameters
 
     def _add_to_config(self, parameters):
-        """ Add the slide parameters to the config file.
+        """ Add the slide parameters to the config file. Also checks that the parameters are valid.
 
         Parameters
         ----------
@@ -281,19 +294,6 @@ class PowerPointReport():
     def _validate_parameters(self, parameters):
         """ Check the format of the input parameters for the slide and return an updated dictionary. """
 
-        # Establish if content or grouped_content was given
-        if "content" in parameters and "grouped_content" in parameters:
-            raise ValueError("Invalid input. Both 'content' and 'grouped_content' were given - please give only one input type.")
-
-        # If split is given, content should be given
-        if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
-            raise ValueError("Invalid input. 'split' is given, but 'content' is empty")
-
-        # If grouped_content is given, it should be a list
-        if "grouped_content" in parameters:
-            if not isinstance(parameters["grouped_content"], list):
-                raise TypeError("Invalid input. 'grouped_content' must be a list.")
-
         # Set outer margin -> left/right/top/bottom
         orig_parameters = parameters.copy()
         for k in list(parameters.keys()):
@@ -312,57 +312,78 @@ class PowerPointReport():
         for param in int_params:
             if param in parameters:
                 try:
-                    parameters[param] = int(parameters[param])
+                    parameters[param] = int(float(str(parameters[param])))  # str() raises an error for bools. float() ensures conversion from 1e10 notation
                 except ValueError:
-                    value = parameters[param]
-                    raise ValueError(f"Could not convert '{param}' parameter to int. The given value is: '{value}'. Please use an integer.")
+                    raise ValueError(f"Invalid value for '{param}' parameter: '{parameters[param]}'. Please use an integer.")
 
         # Format "empty_slide"
         if "empty_slide" in parameters:
             if parameters["empty_slide"] not in ["keep", "skip"]:
-                raise ValueError(f"Invalid input '{parameters['empty_slide']}' for 'empty_slide'. Must be either 'keep' or 'skip'.")
+                raise ValueError(f"Invalid value for 'empty_slide' parameter: {parameters['empty_slide']}. Must be either 'keep' or 'skip'.")
 
         # Format "split" to int or bool
         if "split" in parameters:
-            try:  # try to convert to int first, e.g. if input is "2"
-                parameters["split"] = int(parameters["split"])
-            except Exception:  # if not possible, convert to bool
-                parameters["split"] = _convert_to_bool(parameters["split"])
+            if not isinstance(parameters["split"], bool):  # only try to convert if not already bool
+                try:  # try to convert to int first, e.g. if input is "2"
+                    parameters["split"] = int(str(parameters["split"]))
+                except Exception:  # if not possible, convert to bool
+                    try:
+                        parameters["split"] = _convert_to_bool(parameters["split"])
+                    except ValueError:
+                        raise ValueError(f"Invalid value for 'split' parameter: {parameters['split']}. Must be an integer >= 1 or true/false.")
+
+            if not isinstance(parameters["split"], bool) and parameters["split"] < 1:
+                raise ValueError(f"Invalid value for 'split' parameter: {parameters['split']}. Integer must be >= 1.")
 
         # Format other purely boolean parameters to bool
-        bool_parameters = ["remove_placeholders"]
+        bool_parameters = ["remove_placeholders", "show_borders"]
         for param in bool_parameters:
             if param in parameters:
-                parameters[param] = _convert_to_bool(parameters[param])
+                try:
+                    parameters[param] = _convert_to_bool(parameters[param])
+                except Exception as e:
+                    raise ValueError(f"Invalid value for '{param}' parameter: {parameters[param]}. Error was: {e}")
 
         # Format show_filename
         if "show_filename" in parameters:
             value = parameters["show_filename"]
             try:
                 parameters["show_filename"] = _convert_to_bool(value)
-            except ValueError as e:  # if the value is not a bool, it should be a string
+            except Exception:  # if the value is not a bool, it should be a string
+                valid = self._valid_options["show_filename"]
                 if isinstance(value, str):
-                    valid = ["filename", "filename_ext", "filepath", "filepath_ext", "path"]
                     if value not in valid:
-                        raise ValueError(f"Invalid parameter for 'show_filename'. The given value is: '{value}'. Please use one of the following: {valid}")
+                        raise ValueError(f"Invalid value for 'show_filename' parameter: '{value}'. Please use one of the following: {valid}")
                 else:
-                    raise e  # raise the original error
+                    raise ValueError(f"Invalid value for 'show_filename' parameter: '{value}'. Please use one of the following: {valid}")
 
         # Validate fontsize
         if "fontsize" in parameters:
             try:
-                parameters["fontsize"] = float(parameters["fontsize"])
-            except ValueError:
-                raise ValueError(f"Could not convert 'fontsize' parameter to value. The given value is: '{parameters['fontsize']}'. Please use a float or integer.")
+                parameters["fontsize"] = float(str(parameters["fontsize"]))  # str ensured that boolean will be an error
+            except Exception:
+                raise ValueError(f"Invalid value for 'fontsize' parameter: '{parameters['fontsize']}'. Please use a float or integer.")
 
         # Validate missing_file
         if "missing_file" in parameters:
-            if not isinstance(parameters["missing_file"], str):
-                raise TypeError("Invalid input for 'missing_file' - must be either 'raise', 'empty', 'text' or 'skip'.")
-            else:
-                parameters["missing_file"] = parameters["missing_file"].lower()
-                if parameters["missing_file"] not in ["raise", "empty", "text", "skip"]:
-                    raise ValueError(f"Invalid input '{parameters['missing_file']}' for 'missing_file'. Must be either 'raise', 'empty', 'text' or 'skip'.")
+            parameters["missing_file"] = str(parameters["missing_file"]).lower()
+            if parameters["missing_file"] not in self._valid_options["missing_file"]:
+                raise ValueError(f"Invalid value for 'missing_file' parameter: '{parameters['missing_file']}'. Must be one of: {self._valid_options['missing_file']}")
+
+        # --- Validate input combinations --- #
+
+        # Establish if content or grouped_content was given
+        if "content" in parameters and "grouped_content" in parameters:
+            raise ValueError("Invalid input combination. Both 'content' and 'grouped_content' were given - please give only one input type.")
+
+        # If split is given, content should be given
+        if parameters.get("split", False) is not False and len(parameters.get("content", [])) == 0:
+            raise ValueError("Invalid input combination. 'split' is given, but 'content' is empty")
+
+        # If grouped_content is given, it should be a list
+        if "grouped_content" in parameters:
+            if not isinstance(parameters["grouped_content"], list):
+                raise TypeError(f"Invalid value for 'grouped_content' parameter: {parameters['grouped_content']}. 'grouped_content' must be a list.")
 
     def add_title_slide(self, title, layout=0, subtitle=None):
         """
@@ -457,7 +478,7 @@ class PowerPointReport():
             - "skip": slides without any content will not be added to the presentation
         dpi : int, default 300
             Dots per inch of the image. Only used when converting pdf to image.
-        max_pixels : int, default 1e8
+        max_pixels : int, default 1e7
             Maximum number of pixels in an image. If an image has more pixels than this, it will be resized.
         """
 
@@ -468,6 +489,9 @@ class PowerPointReport():
         parameters["content"] = content
         parameters.update(kwargs)
         parameters = {k: v for k, v in parameters.items() if v is not None}
+        for param in parameters:
+            if param not in self._valid_slide_parameters:
+                raise ValueError(f"Invalid parameter '{param}' given for slide. Valid parameters are: {self._valid_slide_parameters}")
         self._add_to_config(parameters)
         self.logger.debug(f"Input parameters: {parameters}")
 
@@ -482,6 +506,7 @@ class PowerPointReport():
         if "grouped_content" in parameters:
 
             content_per_group = self._get_paired_content(parameters["grouped_content"])
+            self.logger.debug("Grouped content: {}".format(content_per_group))
 
             tmp_files = []
             # Create one slide per group
@@ -497,7 +522,8 @@ class PowerPointReport():
                             img_files = self._convert_pdf(element, parameters["pdf_pages"])
 
                             if len(img_files) > 1:
-                                raise ValueError(f"Multiple pages in pdf is not supported for grouped content. Found {len(img_files)} in {content}, as pdf_pages is set to '{parameters['pdf_pages']}'. "
+                                raise ValueError(f"Invalid value for 'pdf_pages': {parameters['pdf_pages']}. "
+                                                 f"Multiple pages in pdf is not supported for grouped content. Found {len(img_files)} pages in {content}, as pdf_pages is set to '{parameters['pdf_pages']}'. "
                                                  "Please adjust pdf_pages to only include one page, e.g. pdf_pages=1.")
                             content[idx] = img_files[0]
                             tmp_files.append(content[idx])
@@ -596,30 +622,45 @@ class PowerPointReport():
             list containing converted filenames (in the tmp folder)
         """
 
+        # Check that dpi is > 0
+        if dpi <= 0:
+            raise ValueError(f"Invalid value for 'dpi' parameter: {dpi}. Must be an integer > 0.")
+
         # open pdf with fitz module from pymupdf
-        doc = fitz.open(pdf)
+        try:
+            doc = fitz.open(pdf)
+        except Exception as e:
+            raise ValueError(f"Could not open .pdf file: {pdf}. Error was: {e}")
 
         # get page count
         pages = doc.page_count
-        # span array over all available pages e.g. pages 3 transforms to [1,2,3]
-        pages = [i + 1 for i in range(pages)]
+        pages = [i + 1 for i in range(pages)]  # span array over all available pages e.g. pages 3 transforms to [1,2,3]
 
-        if pdf_pages is None:
-            raise IndexError(f"Index {pdf_pages} no valid Index.")
+        # Convert pdf_pages to list
+        try:
+            pdf_pages = int(str(pdf_pages))  # could be a single value, e.g. 1
+        except ValueError:
+            try:
+                # could be a list of values or strings, e.g. ["1", "2"]
+                pdf_pages = [int(str(value)) for value in pdf_pages]
+            except ValueError:
+                try:
+                    if isinstance(pdf_pages, str) and pdf_pages.lower() == "all":  # pdf_pages might be a string "all"
+                        pdf_pages = pages
+                    elif isinstance(pdf_pages, str) and len(pdf_pages.split(",")) > 1:
+                        pdf_pages = [int(str(value)) for value in pdf_pages.split(",")]  # pdf_pages might be a string "1,2" - in this case convert to list of int
+                    else:
+                        raise ValueError
+                except ValueError:
+                    raise ValueError(f"Invalid value for 'pdf_pages' parameter: '{pdf_pages}'. Expected an integer, a list of integers or 'all'.")
 
-        if isinstance(pdf_pages, str):
-            if pdf_pages.lower() == "all":
-                pdf_pages = pages
-            else:
-                raise ValueError(f"pdf_pages as string is expected to be 'all', but it is set to '{pdf_pages}'. Please set pdf_pages to 'all' or a list of integers.")
-        else:
-            if isinstance(pdf_pages, int):
-                pdf_pages = [pdf_pages]
+        if not isinstance(pdf_pages, list):
+            pdf_pages = [pdf_pages]
 
-            # all index available? will also fail if index not int
-            index_mismatch = [page for page in pdf_pages if page not in pages]
-            if len(index_mismatch) != 0:
-                raise IndexError(f"Pages {index_mismatch} not available for {pdf}")
+        # all index available? will also fail if index not int
+        index_mismatch = [page for page in pdf_pages if page not in pages]
+        if len(index_mismatch) != 0:
+            raise IndexError(f"Invalid value for 'pdf_pages' parameter: '{pdf_pages}'. Pages {index_mismatch} not available for {pdf}. Available pages are: {pages}.")
 
         img_files = []
         for page_num in pdf_pages:
@@ -659,7 +700,7 @@ class PowerPointReport():
             list of files/content. If empty_slide is "skip", and no content was found for file patterns, the function will return "skip-slide".
         """
 
-        if isinstance(lst, str):
+        if not isinstance(lst, list):
             lst = [lst]
 
         patterns = []
@@ -672,14 +713,14 @@ class PowerPointReport():
             files_found = []   # names of files found for this element
 
             # If the number of words in element is 1, it could be a file
-            if element is not None and len(element.split()) == 1:
+            if element is not None and len(str(element).split()) == 1:
 
+                element = str(element)  # convert to string, e.g. if element was an int
                 element = element.rstrip().lstrip()  # remove trailing and leading spaces to avoid problems with globbing
 
                 # Try to glob files with unix globbing
-                if element is not None:
-                    globbed = glob.glob(element)
-                    files_found.extend(globbed)
+                globbed = glob.glob(element)
+                files_found.extend(globbed)
 
                 # If no files were found by globbing, try to find files by regex
                 if len(files_found) == 0:
@@ -705,7 +746,7 @@ class PowerPointReport():
                     elif missing_file == "skip":
                         self.logger.warning(f"No files could be found for pattern: '{element}'. Skipping this file on the slide.")
                     else:
-                        raise ValueError(f"Unknown value for 'missing_file': '{missing_file}'")
+                        raise ValueError(f"Invalid value for 'missing_file' parameter: '{missing_file}'. Must be either 'raise', 'empty', 'text' or 'skip'.")
 
                 elif len(files_found) > 0:
                     n_patterns_found += 1
@@ -741,8 +782,6 @@ class PowerPointReport():
 
         # Establish content
         content = parameters.get("content", [])
-        if not isinstance(content, list):
-            content = [content]
 
         # Expand content files
         content = self._expand_files(content, missing_file=parameters["missing_file"], empty_slide=parameters["empty_slide"])
@@ -777,12 +816,8 @@ class PowerPointReport():
             content = [content]
             filenames = [filenames]
         else:
-            if len(content) == 0:
-                raise ValueError("Split is True, but 'content' is empty.")
-            else:
-                if isinstance(parameters["split"], int):
-                    content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
-                    filenames = [filenames[i:i + parameters["split"]] for i in range(0, len(filenames), parameters["split"])]
+            content = [content[i:i + parameters["split"]] for i in range(0, len(content), parameters["split"])]
+            filenames = [filenames[i:i + parameters["split"]] for i in range(0, len(filenames), parameters["split"])]
 
         return content, filenames, tmp_files
 
@@ -845,6 +880,7 @@ class PowerPointReport():
 
         # Search for regex groups
         group_content = {}  # dict of lists of content input
+        n_group_matches = 0
         for i, pattern in enumerate(raw_content):
             group_content[i] = {}
 
@@ -858,13 +894,18 @@ class PowerPointReport():
 
                     groups = m.groups()
                     if len(groups) == 0:
-                        raise ValueError(f"Regex {pattern} does not contain any groups.")
+                        raise ValueError(f"Invalid value for 'grouped_content' parameter. Regex {pattern} does not contain any groups.")
                     elif len(groups) > 1:
-                        raise ValueError(f"Regex {pattern} contains more than one group.")
+                        raise ValueError(f"Invalid value for 'grouped_content' parameter. Regex {pattern} contains more than one group.")
                     group = groups[0]
 
                     # Save the file to the group
                     group_content[i][group] = fil
+                    n_group_matches += 1
+
+        # Check that at least one group was found
+        if n_group_matches == 0:
+            raise ValueError(f"Invalid value for 'grouped_content' parameter: {raw_content}. No groups were found for any of the regex patterns.")
 
         # Collect all groups found
         all_regex_groups = sum([list(d.keys()) for d in group_content.values()], [])  # flatten list of lists
@@ -881,26 +922,6 @@ class PowerPointReport():
         content_per_group = {group: [group_content[i].get(group, None) for i in group_content] for group in all_regex_groups}
 
         return content_per_group
-
-    # ------------------------------------------------------------------------ #
-    # --------------------- Additional elements on slides -------------------- #
-    # ------------------------------------------------------------------------ #
-
-    def add_borders(self):
-        """ Add borders of all content boxes. Useful for debugging layouts."""
-
-        for slide in self._slides:
-            if hasattr(slide, "_boxes"):
-                for box in slide._boxes:
-                    box.add_border()
-
-    def remove_borders(self):
-        """ Remove borders (is there are any) of all content boxes. """
-
-        for slide in self._slides:
-            if hasattr(slide, "_boxes"):
-                for box in slide._boxes:
-                    box.remove_border()
 
     # ------------------------------------------------------------------------ #
     # --------------------- Saving / loading presentations ---------------------
@@ -1010,14 +1031,11 @@ class PowerPointReport():
                 except Exception as e:
                     raise ValueError("Could not load config file from {}. The error was: {}".format(config, e))
 
-        # Set upper attributes
+        # Set upper presentation attributes
         upper_keys = config.keys()
         for key in upper_keys:
             if key != "slides":
                 setattr(self, key, config[key])
-
-                if key == "split":
-                    self.split = bool(config[key])  # convert input string to bool
 
         # Initialize presentation
         self._initialize_presentation()
@@ -1030,22 +1048,17 @@ class PowerPointReport():
         for slide_dict in config["slides"]:
             self.add_slide(**slide_dict)  # add all options from slide config
 
-    def save(self, filename, show_borders=False, pdf=False):
+    def save(self, filename, pdf=False):
         """
         Save the presentation to a file.
 
         Parameters
         ----------
         filename : str
-            Filename of the presentation.
-        show_borders : bool, default False
-            Show borders of the content boxes. Is useful for debugging layouts.
+            Filename of the presentation, e.g. "my_presentation.pptx".
         pdf : bool, default False
             Additionally save the presentation as a pdf file with the same basename as <filename>.
         """
-
-        if show_borders is True:
-            self.add_borders()
 
         self.logger.info("Saving presentation to '" + filename + "'")
 
@@ -1058,10 +1071,6 @@ class PowerPointReport():
         # Save presentation as pdf
         if pdf:
             self._save_pdf(filename)
-
-        # Remove borders again
-        if show_borders is True:
-            self.remove_borders()  # Remove borders again
 
     # not included in tests due to libreoffice dependency
     def _save_pdf(self, filename):  # pragma: no cover

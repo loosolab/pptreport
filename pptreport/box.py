@@ -20,7 +20,7 @@ def split_string(string, length):
     return [string[i:i + length] for i in range(0, len(string), length)]
 
 
-def estimate_fontsize(txt_frame, min_size=6, max_size=18):
+def estimate_fontsize(txt_frame, min_size=6, max_size=18, logger=None):
     """
     Resize text to fit the textbox.
 
@@ -49,16 +49,20 @@ def estimate_fontsize(txt_frame, min_size=6, max_size=18):
     font = pkg_resources.resource_filename("pptreport", "fonts/OpenSans-Regular.ttf")
 
     # Calculate best fontsize
+    size = None
     try:
         size = TextFitter.best_fit_font_size(text, txt_frame._extents, max_size, font)
 
-    except TypeError as e:  # happens with long filenames, which cannot fit on one line
+    except TypeError:  # happens with long filenames, which cannot fit on one line
 
         # Try fitting by splitting long words; decrease length if TextFitter still fails
+        original_text = text[:]
         max_word_len = 20
         while True:
             if max_word_len < 5:
-                raise e
+                if logger is not None:
+                    logger.warning(f"Could not fit text '{original_text}' in textbox. Setting fontsize to {min_size}.")
+                break  # give up; set text to smallest size
             try:
                 words = text.split(" ")
                 words = [split_string(word, max_word_len) for word in words]
@@ -87,7 +91,10 @@ def format_textframe(txt_frame, size=12, name="Calibri"):
 
     for paragraph in txt_frame.paragraphs:
         for run in paragraph.runs:
-            run.font.size = Pt(size)
+            try:
+                run.font.size = Pt(size)
+            except Exception as e:
+                raise ValueError(f"Invalid value for 'fontsize' parameter: {size}. Error was: {e}")
             run.font.name = "Calibri"
 
 
@@ -135,16 +142,10 @@ class Box():
 
         if self.border is None:
             self.border = self.slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, self.left, self.top, self.width, self.height)
+            self.border.shadow.inherit = False  # remove shadow
             self.border.fill.background()
             self.border.line.color.rgb = RGBColor(0, 0, 0)  # black
             self.border.line.width = Pt(1)
-
-    def remove_border(self):
-        """ Removes the border shape """
-
-        if self.border is not None:
-            self.border._sp.getparent().remove(self.border._sp)
-            self.border = None  # reset border
 
     @staticmethod
     def _get_content_type(content):
@@ -166,7 +167,7 @@ class Box():
             return "empty"
         else:
             t = type(content)
-            raise ValueError(f"Content of type '{t}' cannot be added to slide")
+            return t.__name__
 
     def fill(self, content, box_index=0):
         """
@@ -196,13 +197,15 @@ class Box():
                 text_top = self.top
                 self.height = full_height - text_height
                 self.top = self.top + text_height
+
             self.fill_image(content)
 
+            # Resize to add filename
             if self.show_filename is not False:
-                self.height = text_height
+                self.height = text_height  # overwrite height
                 self.top = text_top
-                vertical, horizontal = self._get_content_alignment()
-                if horizontal != "center":
+                _, horizontal = self._get_content_alignment()
+                if horizontal != "center":  # make sure text is placed within the picture width, and not the box width, in case alignment is left / right
                     self.left = self.picture.left
                     self.width = self.picture.width
 
@@ -233,7 +236,7 @@ class Box():
         elif content_type == "empty":
             return  # do nothing
         else:
-            pass
+            raise ValueError(f"Content of type '{content_type}' is not supported by pptreport and cannot be added to slide.")
 
         self.logger.debug(f"Box index {box_index} was filled with {content_type}")
 
@@ -268,8 +271,15 @@ class Box():
         """
 
         max_pixels = self.max_pixels
+        if max_pixels < 4:
+            raise ValueError("Invalid value for 'max_pixels' parameter: '{max_pixels}'. Please use an integer higher than 4.")
 
-        im = Image.open(filename)
+        # Check if image can be opened
+        try:
+            im = Image.open(filename)
+        except Exception as e:
+            raise ValueError(f"Could not open image file '{filename}'. Error was: {e}")
+
         im_width, im_height = im.size
         image_pixels = im_width * im_height
 
@@ -281,7 +291,7 @@ class Box():
             new_width = int(new_height * image_ratio)
             self.logger.warning(f"Image '{filename}' is larger than max_pixels={max_pixels} ({im_height}*{im_width}={image_pixels}). Adjust 'max_pixels' to skip resizing. Resizing to size {new_height}*{new_width}...")
 
-            im = im.resize((new_width, new_height), Image.ANTIALIAS)
+            im = im.resize((new_width, new_height), Image.LANCZOS)
 
             # Create temporary file
             temp_name = next(tempfile._get_candidate_names()) + ".png"
@@ -329,6 +339,12 @@ class Box():
 
         self.logger.debug(f"Getting content alignment for box '{self.box_index}'. Input content alignment is '{self.content_alignment}'")
 
+        # Check if current alignment is valid
+        valid_alignments = ["left", "right", "center", "lower", "upper",
+                            "lower left", "lower center", "lower right",
+                            "upper left", "upper center", "upper right",
+                            "center left", "center center", "center right"]
+
         if isinstance(self.content_alignment, str):  # if content alignment is a string, use it for all boxes
             this_alignment = self.content_alignment
 
@@ -338,16 +354,10 @@ class Box():
             else:
                 this_alignment = self.content_alignment[self.box_index]
         else:
-            raise ValueError(f"Content alignment '{self.content_alignment}' is not valid. Valid content alignments are: str or list of str")
-
-        # Check if current alignment is valid
-        valid_alignments = ["left", "right", "center", "lower", "upper",
-                            "lower left", "lower center", "lower right",
-                            "upper left", "upper center", "upper right",
-                            "center left", "center center", "center right"]
+            raise ValueError(f"Invalid value for 'content_alignment' parameter: '{self.content_alignment}'. Valid content alignments are: {valid_alignments}")
 
         if this_alignment.lower() not in valid_alignments:
-            raise ValueError(f"Alignment '{self.content_alignment}' is not valid. Valid content alignments are: {valid_alignments}")
+            raise ValueError(f"Invalid value for 'content_alignment' parameter: '{self.content_alignment}'. Valid content alignments are: {valid_alignments}")
 
         # Expand into the structure "<vertical> <horizontal>"
         if this_alignment.lower() in ["left", "right", "center"]:
@@ -371,13 +381,13 @@ class Box():
             else:
                 this_alignment = self.filename_alignment[self.box_index]
         else:
-            raise ValueError(f"Filename alignment '{self.filename_alignment}' is not valid. Valid filename alignments are: str or list of str")
+            raise ValueError(f"Invalid value for 'filename_alignment' parameter: {self.filename_alignment}. The input type must be string or list of strings.")
 
         # Check if current alignment is valid
         valid_alignments = ["left", "right", "center"]
-
-        if this_alignment.lower() not in valid_alignments:
-            raise ValueError(f"Alignment '{self.filename_alignment}' is not valid. Valid filename alignments are: {valid_alignments}")
+        this_alignment = this_alignment.lower().strip()  # remove any trailing spaces
+        if this_alignment not in valid_alignments:
+            raise ValueError(f"Invalid value for 'filename_alignment' parameter: {self.filename_alignment}. Valid filename alignments are: {valid_alignments}.")
 
         return this_alignment
 
@@ -555,7 +565,7 @@ class Box():
         # Try to fit text size to the box
         if self.fontsize is None:
             self.logger.debug("Estimating fontsize...")
-            size = estimate_fontsize(txt_frame)
+            size = estimate_fontsize(txt_frame, logger=self.logger)
             self.logger.debug(f"Found: {size}")
         else:
             size = self.fontsize

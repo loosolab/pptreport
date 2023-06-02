@@ -1,4 +1,4 @@
-{"template": "template.pptx",
+{"template": "content/template.pptx",
  "global_parameters": {"outer_margin": 1, "top_margin": 1.5},
  "slides": [{"title": "An automatically generated presentation", "slide_layout": 0},
             {"title": "Layout can also be chosen using the layout name\n('Title Slide')",

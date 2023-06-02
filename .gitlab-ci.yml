@@ -51,6 +51,7 @@ tests:
   script:
     - pip install pytest
     - pip install pytest-cov
+    - pip install pandas  # needed for tests to create dataframe
     - pytest --cov-report=term --cov=pptreport  --junitxml=pytest.xml --cov-report html:htmlcov .
   artifacts:
     when: always

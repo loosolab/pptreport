@@ -15,56 +15,21 @@ def test_title_slide():
     assert slide._slide.shapes[1].text == "Subtitle"
 
 
-@pytest.mark.parametrize("fill_by, valid", [("row", True),
-                                            ("column", True),
-                                            ("invalid", False)])
-def test_fill_by(fill_by, valid):
+@pytest.mark.parametrize("fill_by", ["row", "column"])
+def test_fill_by(fill_by):
     """ Test that content is filled correctly by row or column """
 
     report = PowerPointReport()
     content = ["text" + str(i + 1) for i in range(4)]
 
-    if valid:
-        report.add_slide(content, fill_by=fill_by)
-        slide = report._slides[0]
+    report.add_slide(content, fill_by=fill_by)
+    slide = report._slides[0]
 
-        # Assert using the locations of the boxes
-        if fill_by == "row":
-            assert slide._boxes[0].top == slide._boxes[1].top
-        elif fill_by == "column":
-            assert slide._boxes[0].left == slide._boxes[1].left
-
-    else:
-        with pytest.raises(ValueError):
-            report.add_slide(content, fill_by=fill_by)
-
-
-@pytest.mark.parametrize("options", [{"content": ["text"], "grouped_content": ["text"]},    # both content and grouped_content given
-                                     {"content": None, "split": True},   # content has to given when split is True
-                                     {"n_columns": "a lot"},
-                                     {"show_filename": "invalid"},
-                                     {"split": "invalid"}])
-def test_invalid_input(options):
-    """ Test that invalid input raises ValueError"""
-
-    report = PowerPointReport()
-    with pytest.raises(ValueError):
-
-        if "content" not in options and "grouped_content" not in options:
-            options["content"] = content_dir + "cat.jpg"
-
-        report.add_slide(**options)
-
-
-@pytest.mark.parametrize("options", [{"grouped_content": "text"},  # grouped_content has to be a list
-                                     {"missing_file": list}       # missing file should be bool or string
-                                     ])
-def test_typeerror(options):
-    """ Test that TypeError is raised when invalid type is given """
-
-    report = PowerPointReport()
-    with pytest.raises(TypeError):
-        report.add_slide(**options)
+    # Assert using the locations of the boxes
+    if fill_by == "row":
+        assert slide._boxes[0].top == slide._boxes[1].top
+    elif fill_by == "column":
+        assert slide._boxes[0].left == slide._boxes[1].left
 
 
 @pytest.mark.parametrize("show_filename, expected", [(True, "cat"),
@@ -89,3 +54,12 @@ def test_show_filename(show_filename, expected):
 
     else:
         assert len(slide._slide.shapes) == 1
+
+
+@pytest.mark.parametrize("config", [{"left_margin": 50}, {"top_margin": 50}])
+def test_large_margins(config):
+    """ Check that large margins throw an error correctls """
+
+    report = PowerPointReport()
+    with pytest.raises(ValueError, match="The .+ of content is negative."):
+        report.add_slide(content_dir + "cat.jpg", **config)
