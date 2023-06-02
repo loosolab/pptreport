@@ -103,7 +103,6 @@ build-pages:
     - pip freeze | grep sphinx
     - cd docs
     - make html
-    - mv build/html/ ../public/
   artifacts:
     paths:
       - public
