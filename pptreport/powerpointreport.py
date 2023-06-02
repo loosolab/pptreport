@@ -480,6 +480,8 @@ class PowerPointReport():
             Dots per inch of the image. Only used when converting pdf to image.
         max_pixels : int, default 1e7
             Maximum number of pixels in an image. If an image has more pixels than this, it will be resized.
+        show_borders : bool, default False
+            Whether to show borders of content boxes. This option is useful for debugging layouts. If True, adds a black border to the content boxes. If False, no borders are added.
         """
 
         self.logger.debug("Started adding slide")

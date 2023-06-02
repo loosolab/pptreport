@@ -8,3 +8,4 @@ pptreport
    overview
    examples/index
    API/index
+   changelog

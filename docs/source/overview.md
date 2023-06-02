@@ -4,7 +4,12 @@ The pptreport package is a tool for building powerpoint presentations using a co
 
 ## How to install
 
-pptreport can be installed from github using:
+pptreport can be installed via PyPI:
+```bash
+$ pip install pptreport
+```
+
+pptreport can also be installed from github using:
 ```bash
 $ git clone https://gitlab.gwdg.de/loosolab/software/pptreport.git
 $ cd pptreport 
