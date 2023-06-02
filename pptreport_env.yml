@@ -7,6 +7,6 @@ dependencies:
   - notebook
   - pip
   - pip:
-    - -e ".[all]" # install pptreport from local repository, has to be in current directory!
+    - -e "." # install pptreport from local repository, has to be in current directory!
   - ipykernel # needed to register environment as jupyter kernel
 
