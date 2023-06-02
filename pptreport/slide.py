@@ -119,7 +119,7 @@ class Slide():
             if isinstance(value, str):
                 try:
                     value = [v for v in value.split(",")]
-                except ValueError:
+                except Exception:
                     raise ValueError(f"Invalid value for '{param}' parameter: '{value}'. Please give a list of values.")
 
             # Convert from list of strings to list of floats
