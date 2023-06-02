@@ -178,7 +178,7 @@ class Slide():
         unique_layout_indices = np.unique(layout_matrix)
 
         # Check that all values in layout_matrix are in content_indices and vice versa
-        extra_layout_indices = [i for i in unique_layout_indices if i not in content_indices]
+        extra_layout_indices = [i for i in unique_layout_indices if i not in content_indices and i != -1]  # -1 is allowed; will be empty box
         if len(extra_layout_indices) > 0:
             self.logger.warning(f"The layout matrix contains indices that are outside the indices in content (max index = {n_elements-1}): {extra_layout_indices}. These additional content boxes will be empty.")
 
@@ -312,7 +312,7 @@ class Slide():
         # Box coordinates
         box_numbers = layout_matrix[~np.isnan(layout_matrix)].flatten().astype(int)
         box_numbers = sorted(set(box_numbers))  # unique box numbers
-        box_numbers = [box_number for box_number in box_numbers if box_number >= 0]  # remove negative numbers
+        box_numbers = [box_number for box_number in box_numbers if box_number >= 0]  # remove negative numbers, e.g. -1 is empty box
         for i in box_numbers:
 
             # Get column and row number
