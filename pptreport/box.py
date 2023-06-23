@@ -9,6 +9,9 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.dml.color import RGBColor
 from pptx.util import Pt
 from pptx.text.layout import TextFitter
+from pptx.oxml.xmlchemy import OxmlElement
+
+from pptreport.config import font_name, md_heading_sizes
 
 # For reading pictures
 from PIL import Image
@@ -20,7 +23,7 @@ def split_string(string, length):
     return [string[i:i + length] for i in range(0, len(string), length)]
 
 
-def estimate_fontsize(txt_frame, min_size=6, max_size=18, logger=None):
+def estimate_fontsize(txt_frame, text, min_size=6, max_size=18, logger=None):
     """
     Resize text to fit the textbox.
 
@@ -38,12 +41,6 @@ def estimate_fontsize(txt_frame, min_size=6, max_size=18, logger=None):
     size : int
         The estimated fontsize of the text.
     """
-
-    # Get the text across all runs
-    text = ""
-    for paragraph in txt_frame.paragraphs:
-        for run in paragraph.runs:
-            text += run.text
 
     # Get font
     font = pkg_resources.resource_filename("pptreport", "fonts/OpenSans-Regular.ttf")
@@ -86,16 +83,92 @@ def estimate_fontsize(txt_frame, min_size=6, max_size=18, logger=None):
     return size
 
 
-def format_textframe(txt_frame, size=12, name="Calibri"):
-    """ Set the fontsize of the text in the text frame. """
+def set_fontsize(run, size):
+    """ Set the fontsize of a run.
 
-    for paragraph in txt_frame.paragraphs:
-        for run in paragraph.runs:
-            try:
-                run.font.size = Pt(size)
-            except Exception as e:
-                raise ValueError(f"Invalid value for 'fontsize' parameter: {size}. Error was: {e}")
-            run.font.name = "Calibri"
+    Parameters
+    ----------
+    run : pptx.text.text.Run
+        The run to be resized.
+    size : int
+        The fontsize of the text.
+    """
+
+    try:
+        run.font.size = Pt(size)
+    except Exception as e:
+        raise ValueError(f"Invalid value for 'fontsize' parameter: {size}. Error was: {e}")
+
+
+def set_fontname(run, font_name):
+    """ Set the fontname of a run.
+
+    Parameters
+    ----------
+    run : pptx.text.text.Run
+        The run to be resized.
+    font_name : str
+        The fontname of the text.
+    """
+    try:
+        run.font.name = font_name
+    except Exception as e:
+        raise ValueError(f"Invalid value for 'fontname' parameter: {font_name}. Error was: {e}")
+
+
+def set_highlight(run, color):
+    """ Set background highlight color of text in run. Method from https://github.com/MartinPacker/md2pptx.
+
+    Color is specified as a hex string, e.g. "#FF0000" for red.
+    """
+
+    # get run properties
+    rPr = run._r.get_or_add_rPr()
+
+    # Create highlight element
+    hl = OxmlElement("a:highlight")
+
+    # Create specify RGB Colour element with color specified
+    srgbClr = OxmlElement("a:srgbClr")
+    setattr(srgbClr, "val", color)
+
+    # Add colour specification to highlight element
+    hl.append(srgbClr)
+
+    # Add highlight element to run properties
+    rPr.append(hl)
+
+    return run
+
+
+def parse_md_structure(data, current_path=[], info={}):
+    """ Recursive function to parse the markdown structure from mistune """
+
+    result = []
+    if isinstance(data, dict):
+
+        skip_keys = ["type", "children", "text", "alt"]
+        info = info.copy()
+        info.update({key: data[key] for key in data.keys() if key not in skip_keys})
+
+        if 'type' in data:
+            current_path.append(data['type'])
+            if 'children' not in data:  # leaf node
+                text = data.get('text', data.get('alt', ""))  # text or alt
+                result.append((current_path[:], (text, info)))
+                current_path.pop()
+
+            else:
+                if "children" in data:
+                    for child in data["children"]:
+                        result.extend(parse_md_structure(child, current_path, info))
+                    current_path.pop()
+
+    elif isinstance(data, list):
+        for i, item in enumerate(data):
+            result.extend(parse_md_structure(item, current_path, info))
+
+    return result
 
 
 class Box():
@@ -413,37 +486,7 @@ class Box():
         elif horizontal == "center":
             self.content_left = self.left + (self.width - self.content_width) / 2
 
-    def _contains_md(self, text):
-        """ Checks if a string contains any md sequences.
-        """
-
-        # https://chubakbidpaa.com/interesting/2021/09/28/regex-for-md.html
-        md_regex = {"heading": r"(#{1,8}\s)(.*)",
-                    "emphasis": r"(\*|\_)+(\S+)(\*|\_)+",
-                    "links": r"(\[.*\])(\((http)(?:s)?(\:\/\/).*\))",
-                    "images": r"(\!)(\[(?:.*)?\])\(.*(\.(jpg|png|gif|tiff|bmp))(?:(\s\"|\')(\w|\W|\d)+(\"|\'))?\)",
-                    "uo-list": r"(^(\W{1})(\s)(.*)(?:$)?)+",
-                    "io-list": r"(^(\d+\.)(\s)(.*)(?:$)?)+",
-                    }
-
-        for reg in md_regex.values():
-            if re.search(reg, text):
-                return True
-
-        return False
-
-    def _get_text_all_children(self, parent):
-        """
-        Small helper to improve robustness.
-        Should normally be only one child per parent on this level.
-        ! Use only internally for ast tree from mistune!
-        """
-        text = ""
-        for c in parent["children"]:
-            text += c["text"]
-        return text
-
-    def _fill_md(self, p, text):
+    def _fill_md(self, p, text, font_size):
         """
         Fills a paragraph p with basic markdown formatted text, like **Bold**, *italic* ,...
         Supported types:
@@ -453,12 +496,16 @@ class Box():
         - Heading   #H1 / ## H2 / ...
         (- Image    Only partly - if alternative text is given it will be shown, image should be add via add_image())
 
+        If text does not contain markdown, it will be added as plain text.
+
         Parameters
         ----------
         p : <pptx.text.text._Paragraph>
             paragraph to add to
         text : str
             The text to be added to the box.
+        font_size : int
+            The font size of the text. Header sizes are controlled by the fontsizes given in config.md_heading_sizes.
         """
 
         self.logger.debug(f"Adding markdown formatted text to box '{self.box_index}'.")
@@ -469,72 +516,92 @@ class Box():
         # render input as html.ast
         markdown = mistune.create_markdown(renderer="ast")
 
+        supported_types = ["paragraph", "text", "heading", "newline", "image", "list", "list_item",
+                           "block_text", "block_quote", "strong", "emphasis", "link", "codespan", "thematic_break"]
+
         # traverse the tree
         for i, string in enumerate(text.split("\n")):
             for par in markdown(string):
-                if par["type"] == "paragraph":
 
-                    # Add newlines between paragraphs
-                    if i > 0:
-                        run = p.add_run()
-                        run.text = "\n"
-
-                    for child in par["children"]:  # children are the single md elements like bold, italic,...
-                        # italic
-                        if child["type"] == "emphasis":
-                            run = p.add_run()
-                            run.font.italic = True
-                            run.text = self._get_text_all_children(child)
-                        # bold
-                        elif child["type"] == "strong":
-                            run = p.add_run()
-                            run.text = self._get_text_all_children(child)
-                            run.font.bold = True
-                        # link
-                        elif child["type"] == "link":
-                            run = p.add_run()
-                            run.text = self._get_text_all_children(child)
-                            hlink = run.hyperlink
-                            hlink.address = child["link"]
-                        # alternative text for images
-                        elif child["type"] == "image":
-                            try:
-                                print("markdown images not supported. Trying alternative text.")
-                                text = child["alt"]
-                                run = p.add_run()
-                                run.text = text
-                            except KeyError:
-                                print("No alternative text given. Skipping entry.")
-                        # codespan
-                        # elif child["type"]=="codespan":
-                        # plain text & default case
-                        else:
-                            try:
-                                text = child["text"]
-                            except KeyError:
-                                print("Unknown child type. Trying to append children's content as plain text.")
-                                try:
-                                    text = self._get_text_all_children(child)
-                                except KeyError:
-                                    print(f"Child type {child['type']} is not supported.")
-                                    continue  # continue with next child
-                            run = p.add_run()
-                            run.text = text
-
-                elif par["type"] == "newline":
+                # Add newlines between string elements (except for the first element)
+                if i > 0:
                     run = p.add_run()
-                    run.text = "\n"  # newline for new paragraph
+                    run.text = "\n"
+                    set_fontsize(run, font_size)
 
-                elif par["type"] == "heading":
-                    # implement heading (bold, bigger) ? Or add it only as plain txt
-                    pass
+                # Parse all types within this string
+                parse_result = parse_md_structure(par, [])
 
-                elif par["type"] == "list":
-                    # implement list
-                    pass
-                else:
-                    # will be handled in paragraph > codespan/link/block_code (they have duplicate entries in the tree)
-                    pass
+                # Get prefix for the line in case of list / code / quote
+                first_element_types = parse_result[0][0]
+                if "list" in first_element_types:
+
+                    self.logger.warning("Markdown lists are not supported. Adding element as plain text with number/bullet prefix.")
+
+                    # Get number of whitespaces before the first text
+                    prefix = re.match(r"^(\s*).+", string).group(1)  # get number of whitespaces before the first text
+
+                    # Get list item number / bullet point
+                    info_dict = parse_result[0][1][1]
+                    if info_dict.get("ordered", False):  # ordered list
+                        prefix += f"{info_dict.get('start', 1)}. "
+                    else:  # unordered list
+                        prefix += "• "  # bullet point list
+
+                    parse_result.insert(0, (["paragraph"], (prefix, {})))  # insert prefix as first element (without any formatting)
+
+                elif "thematic_break" in first_element_types:
+                    self.logger.warning(f"Markdown horizontal rules are not supported. Adding literal string: '{string}'")
+                    parse_result = [(["paragraph"], (string, {}))]
+
+                elif "block_code" in first_element_types:
+                    self.logger.warning(f"Markdown code blocks are not supported. Adding literal string: '{string}'")
+                    parse_result = [(["paragraph"], (string, {}))]  # replace code block start/end with literal string
+
+                elif "block_quote" in first_element_types:
+                    self.logger.warning(f"Markdown block quotes are not supported. Adding literal string: '{string}'")
+                    parse_result = [(["paragraph"], (string, {}))]  # replace with literal string
+
+                # Add text to paragraph
+                for types, (text, info) in parse_result:
+                    # self.logger.debug(f"Adding markdown text to paragraph. Types: {types}. Text: {repr(text)}. Additional info: {info}.")
+
+                    # Check if type is supported
+                    for type in types:
+                        if type not in supported_types:
+                            self.logger.warning(f"pptreport does not support markdown type '{type}' found in string: '{string}'. Adding text instead: '{text}'")
+                        elif type == "image":
+                            self.logger.warning(f"Markdown images are not supported by pptreport. Adding alternative text instead: '{text}'")
+
+                    # Add run to paragraph
+                    run = p.add_run()
+                    run.text = text
+
+                    # Adjust formatting
+                    run.font.bold = True if "strong" in types else False
+                    run.font.italic = True if "emphasis" in types else False
+
+                    # Add highlight for inline code
+                    if "codespan" in types:
+                        set_highlight(run, "e0e0e0")  # light grey
+
+                    # Add hyperlink
+                    if "link" in types:
+                        hlink = run.hyperlink
+                        hlink.address = info["link"]
+
+                    # Set font size for heading / normal text
+                    if "heading" in types:
+                        level = info["level"]
+                        try:
+                            header_fontsize = md_heading_sizes[level]
+                        except KeyError:
+                            self.logger.warning(f"Header level {level} is not supported. Using default font size.")
+                            header_fontsize = font_size
+                        set_fontsize(run, header_fontsize)
+
+                    else:
+                        set_fontsize(run, font_size)  # font size for plain text
 
     def fill_text(self, text, is_filename=False):
         """
@@ -552,24 +619,19 @@ class Box():
         txt_frame = txt_box.text_frame
         txt_frame.word_wrap = True
 
-        # Check if text contains markdown
-        md = self._contains_md(text)
-
-        # Place all text in one paragraph
-        p = txt_frame.paragraphs[0]
-        if md:
-            self._fill_md(p=p, text=text)
-        else:
-            p.text = text
-
         # Try to fit text size to the box
         if self.fontsize is None:
-            self.logger.debug("Estimating fontsize...")
-            size = estimate_fontsize(txt_frame, logger=self.logger)
-            self.logger.debug(f"Found: {size}")
+            self.logger.debug("Estimating fontsize based on text...")
+            size = estimate_fontsize(txt_frame, text, logger=self.logger)
+            self.logger.debug(f"Fontsize set at: {size}")
         else:
             size = self.fontsize
-        format_textframe(txt_frame, size=size)
+
+        # Place all text in one paragraph
+        p = txt_frame.paragraphs[0]  # empty paragraph
+        self._fill_md(p=p, text=text, font_size=size)  # if text does not contain markdown, it will be added as plain text
+        for run in p.runs:
+            set_fontname(run, font_name)  # only format font name (size is set during markdown filling)
 
         # Set alignment of text in textbox
         if is_filename:
