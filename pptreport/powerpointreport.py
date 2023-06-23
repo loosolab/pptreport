@@ -557,7 +557,6 @@ class PowerPointReport():
             os.remove(tmp_file)
 
         self.logger.debug("Finished adding slide")
-        self.logger.debug("-" * 60)  # separator between slide logging
 
     def _setup_slide(self, parameters):
         """ Initialize an empty slide with a given layout. """
@@ -849,11 +848,15 @@ class PowerPointReport():
                 break  # reached root directory
 
         # Prepare regex for file search
-        pattern = re.sub(r'(?<!\\)/', r'\\/', pattern)  # Automatically escape / in regex (if not already escaped)
+        pattern_escaped = re.sub(r'(?<!\\)/', r'\\/', pattern)  # Automatically escape / in regex (if not already escaped)
         try:
-            pattern_compiled = re.compile(pattern)
+            pattern_compiled = re.compile(pattern_escaped)
         except re.error:
-            raise ValueError(f"Invalid regex: {pattern}")
+            # Regex is invalid, assume the pattern is not a regex
+            self.logger.warning(f"Pattern is not a valid regex: '{pattern}'. Treating the content as text.")
+            return [pattern]
+        except Exception as e:
+            raise e
 
         # Find all files that match the regex
         search_glob = os.path.join(directory, "**")
@@ -1049,6 +1052,7 @@ class PowerPointReport():
         # Fill in slides with information from slide config
         for slide_dict in config["slides"]:
             self.add_slide(**slide_dict)  # add all options from slide config
+            self.logger.debug("-" * 60)  # separator between slide logging
 
     def save(self, filename, pdf=False):
         """

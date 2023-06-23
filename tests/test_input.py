@@ -89,15 +89,17 @@ def test_invalid_params():
 @pytest.mark.parametrize("content, valid",
                          [(content_dir + "colored_animals/(.*)_blue.jpg", True),
                           (content_dir + "colored_animals/([*)_blue.jpg", False)])
-def test_regex_input(content, valid):
+def test_regex_input(caplog, content, valid):
     config = {"content": content}
 
     report = PowerPointReport()
+    report.add_slide(**config)
+
     if valid:
-        report.add_slide(**config)
+        assert "WARNING" not in caplog.text  # check that no warning is written
     else:
-        with pytest.raises(ValueError, match="Invalid regex"):
-            report.add_slide(**config)
+        assert "Pattern is not a valid regex:" in caplog.text  # check that warning is written
+        assert report._slides[0]._boxes[0].content == content
 
 
 # ------------------------------------------------------------------- #

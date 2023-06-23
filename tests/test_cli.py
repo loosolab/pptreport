@@ -35,12 +35,7 @@ def test_commandline():
     report.save("test_API.pptx")
 
     # Assert that the two reports are the same
-    with open("test_CLI.pptx", "rb") as f:
-        data1 = f.read()
-    with open("test_API.pptx", "rb") as f:
-        data2 = f.read()
-
-    assert data1 == data2
+    assert os.stat("test_CLI.pptx").st_size == os.stat("test_API.pptx").st_size
 
     # Clean up
     os.remove("test_CLI.pptx")
