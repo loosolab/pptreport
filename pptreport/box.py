@@ -517,7 +517,7 @@ class Box():
         markdown = mistune.create_markdown(renderer="ast")
 
         supported_types = ["paragraph", "text", "heading", "newline", "image", "list", "list_item",
-                           "block_text", "block_quote", "strong", "emphasis", "link", "codespan"]
+                           "block_text", "block_quote", "strong", "emphasis", "link", "codespan", "thematic_break"]
 
         # traverse the tree
         for i, string in enumerate(text.split("\n")):
@@ -550,12 +550,16 @@ class Box():
 
                     parse_result.insert(0, (["paragraph"], (prefix, {})))  # insert prefix as first element (without any formatting)
 
+                elif "thematic_break" in first_element_types:
+                    self.logger.warning(f"Markdown horizontal rules are not supported. Adding literal string: '{string}'")
+                    parse_result = [(["paragraph"], (string, {}))]
+
                 elif "block_code" in first_element_types:
-                    self.logger.warning(f"Markdown code blocks are not supported. Adding literal string: {string}")
+                    self.logger.warning(f"Markdown code blocks are not supported. Adding literal string: '{string}'")
                     parse_result = [(["paragraph"], (string, {}))]  # replace code block start/end with literal string
 
                 elif "block_quote" in first_element_types:
-                    self.logger.warning(f"Markdown block quotes are not supported. Adding literal string: {string}")
+                    self.logger.warning(f"Markdown block quotes are not supported. Adding literal string: '{string}'")
                     parse_result = [(["paragraph"], (string, {}))]  # replace with literal string
 
                 # Add text to paragraph
