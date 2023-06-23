@@ -87,3 +87,27 @@ def test_invalid_content_type(content):
     report = PowerPointReport()
     with pytest.raises(ValueError):
         report.add_slide(content=content)
+
+
+@pytest.mark.parametrize("string, warning",
+                         [("**Bold**", None),
+                          ("_Italic_", None),
+                          ("**Bold and _italic_**", None),  # nested markdown
+                          ("# A title", None),
+                          ("[Link](a/link)", None),
+                          ("`inline code`", None),
+                          ("----", "Markdown horizontal rules are not supported"),
+                          ("- list entry", "Markdown lists are not supported"),
+                          ("   1. list entry", "Markdown lists are not supported"),
+                          ("```\ncode block\n```", "Markdown code blocks are not supported"),
+                          ("> Blockquote", "Markdown block quotes are not supported"),
+                          ("![](image.png)", "Markdown images are not supported")])
+def test_markdown_warning(caplog, string, warning):
+
+    report = PowerPointReport()
+    report.add_slide(string)
+
+    if warning is not None:
+        assert warning in caplog.text
+    else:
+        assert "not supported" not in caplog.text  # check that no warning about markdown support was raised
