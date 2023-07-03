@@ -116,15 +116,67 @@ def test_content_input(content, valid):
 # ------------------------------------------------------------------- #
 # grouped content
 @pytest.mark.parametrize("grouped_content, valid",
-                         [(["string", content_dir + "colored_animals/(.*)_blue.jpg", content_dir + "colored_animals/(.*)_blue.jpg"], True),
-                          ([content_dir + "colored_animals/.*_blue.jpg", content_dir + "colored_animals/(.*)_blue.jpg"], False),  # no groups
+                         [(["string", content_dir + "colored_animals/(.*)_blue.jpg", content_dir + "colored_animals/(.*)_red.jpg"], True),
                           ([content_dir + "colored_animals/(.*)_(.*).jpg"], False),  # two groups
-                          (["no", "groups"], False),
-                          ("A text", False)])
+                          (["no", "groups"], True),  # no groups, but valid
+                          ("A text", False)])   # not a list
 def test_grouped_content(grouped_content, valid):
-    config = {"content": None, "grouped_content": grouped_content}
+    config = {"content": None, "grouped_content": grouped_content, "missing_file": "text"}
     validate(config, valid)
 
+
+def test_grouped_content_warning(caplog):
+    """ Test that a warning is written when no groups are found """
+    config = {"grouped_content": [content_dir + "colored_animals/.*_blue.jpg"]}
+
+    report = PowerPointReport()
+    report.add_slide(**config)
+    assert "WARNING" in caplog.text
+    assert "the pattern does not contain a capturing group" in caplog.text
+
+
+@pytest.mark.parametrize("missing_file", ["raise", "empty", "skip", "text"])
+def test_grouped_missing(caplog, missing_file):
+    """ Test that a warning is written when only some groups are found """
+
+    config = {"grouped_content": ["string",
+                                  content_dir + "colored_animals/(.*)_red.jpg",
+                                  content_dir + "colored_animals/(.*)_yellow.jpg",
+                                  content_dir + "colored_animals/(.*)_blue.jpg"],
+              "missing_file": missing_file}
+
+    report = PowerPointReport(verbosity=2)
+
+    if missing_file == "raise":
+        with pytest.raises(FileNotFoundError, match="Missing file\(s\) for grouped content pattern"):
+            report.add_slide(**config)
+    elif missing_file == "empty":
+        report.add_slide(**config)
+        assert "Adding empty box." in caplog.text
+    elif missing_file == "skip":
+        report.add_slide(**config)
+        assert "Skipping this element." in caplog.text
+    elif missing_file == "text":
+        report.add_slide(**config)
+        assert "Adding this element as text." in caplog.text
+
+
+@pytest.mark.parametrize("empty_slide", ["keep", "skip"])
+def test_grouped_missing_empty(caplog, empty_slide):
+
+    config = {"grouped_content": ["string", "no_match(.)+"],
+              "missing_file": "skip",
+              "empty_slide": empty_slide}
+
+    report = PowerPointReport(verbosity=2)
+    report.add_slide(**config)
+
+    if empty_slide == "keep":
+        assert "Adding empty slide." in caplog.text
+        assert len(report._slides) == 1
+
+    elif empty_slide == "skip":
+        assert len(report._slides) == 0
 
 # ------------------------------------------------------------------- #
 # Set title (all types can be converted to str)

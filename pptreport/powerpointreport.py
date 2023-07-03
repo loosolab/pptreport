@@ -521,6 +521,7 @@ class PowerPointReport():
 
             # If no grouped content was found, add empty slide if empty_slide is "keep"
             if len(content_per_group) == 0 and parameters["empty_slide"] == "keep":
+                self.logger.warning(f"No grouped content found for input: '{parameters['grouped_content']}, but empty_slide == 'keep'. Adding empty slide. Set empty_slide == 'skip' to skip slides without content.")
                 slide = self._setup_slide(parameters)
                 slide.content = parameters["grouped_content"] if parameters["missing_file"] == "text" else []
                 slide._filenames = [""] * len(slide.content)
@@ -949,23 +950,12 @@ class PowerPointReport():
         for i in group_content:  # index of raw_content
             raw_input = raw_content[i]
 
-            if len(group_content[i]) == 0:
-
-                if _looks_like_filename(raw_input) and not os.path.isfile(raw_input):
-                    if missing_file == "raise":
-                        raise FileNotFoundError(f"No files could be found for pattern: '{raw_input}'. Adjust pattern or set missing_file='empty'/'text'/'skip' to ignore the missing file.")
-                    elif missing_file == "empty":
-                        self.logger.warning(f"No files could be found for pattern: '{raw_input}'. Adding empty box.")
-                        raw_input = ""
-                    elif missing_file == "skip":
-                        continue  # skip this element
-                    elif missing_file == "text":
-                        pass  # keep raw_input as is
-
+            if len(group_content[i]) == 0:  # no groups found
                 for group in all_regex_groups:
                     content_per_group[group].append(raw_input)  # this is the same for each slide
 
             else:
+                # Add content for each group with a file
                 for group in group_content[i].keys():
                     content_per_group[group].append(group_content[i][group])
 
@@ -975,22 +965,35 @@ class PowerPointReport():
                     if missing_file == "raise":
                         s = f"Missing file(s) for grouped content pattern '{raw_input}' for group(s): {missing_groups}."
                         s += " Please ensure that the file(s) exists or adjust 'missing_file' parameter to 'text'/'empty'/'skip' to prevent this error."
-                        raise ValueError(s)
+                        raise FileNotFoundError(s)
 
                     else:
                         self.logger.debug(f"Missing file for index {i} for groups: {missing_groups}")
                         for group in missing_groups:
                             pattern = r"\((.*?)\)"
+                            element = re.sub(pattern, group, raw_input)
+                            content_per_group[group].append(element)  # fill group name into pattern group
 
-                            if missing_file == "text":
-                                element = re.sub(pattern, group, raw_content[i])
-                            elif missing_file == "empty":
-                                element = None  # empty box
-                            elif missing_file == "skip":
-                                continue  # do not add box to slide
+        # Check if files are missing for any group
+        for group in content_per_group:
+            to_skip = []
+            for i, element in enumerate(content_per_group[group]):
+                if _looks_like_filename(element) and not os.path.exists(element):
+                    if missing_file == "raise":
+                        raise FileNotFoundError(f"No file could be found for grouped input: '{element}'. Adjust pattern or set missing_file='empty'/'text'/'skip' to ignore the missing file.")
+                    elif missing_file == "empty":
+                        self.logger.warning(f"No file could be found for grouped input: '{element}'. Adding empty box.")
+                        content_per_group[group][i] = None  # empty box
+                    elif missing_file == "skip":
+                        self.logger.warning(f"No file could be found for grouped input: '{element}'. Skipping this element.")
+                        to_skip.append(i)
+                        continue  # skip this element
+                    elif missing_file == "text":
+                        self.logger.warning(f"No file could be found for grouped input: '{element}'. Adding this element as text.")
+                        pass  # keep raw_input as is
 
-                            # fill group name into pattern group
-                            content_per_group[group].append(element) 
+            for i in to_skip[::-1]:  # reverse order to not mess up indexing
+                del content_per_group[group][i]
 
         # Convert from group per element to element per group
         self.logger.debug(f"Content per group: {content_per_group}")
