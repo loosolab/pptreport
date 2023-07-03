@@ -923,7 +923,7 @@ class PowerPointReport():
 
             # Check if any files were found and raise error if none were found for file-looking patterns
             if len(files) == 0 and _looks_like_filename(pattern) and missing_file == "raise":
-                raise FileNotFoundError(f"No files were found for the pattern: {pattern}. Adjust missing_file parameter to 'empty', 'text' or 'skip' to avoid this error.") 
+                raise FileNotFoundError(f"No files were found for the pattern: {pattern}. Adjust missing_file parameter to 'empty', 'text' or 'skip' to avoid this error.")
 
             # Find all groups within the regex
             warning = 0
