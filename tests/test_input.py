@@ -148,7 +148,7 @@ def test_grouped_missing(caplog, missing_file):
     report = PowerPointReport(verbosity=2)
 
     if missing_file == "raise":
-        with pytest.raises(FileNotFoundError, match="Missing file\(s\) for grouped content pattern"):
+        with pytest.raises(FileNotFoundError, match=r"Missing file\(s\) for grouped content pattern"):
             report.add_slide(**config)
     elif missing_file == "empty":
         report.add_slide(**config)
@@ -177,6 +177,7 @@ def test_grouped_missing_empty(caplog, empty_slide):
 
     elif empty_slide == "skip":
         assert len(report._slides) == 0
+
 
 # ------------------------------------------------------------------- #
 # Set title (all types can be converted to str)
