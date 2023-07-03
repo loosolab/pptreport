@@ -161,6 +161,27 @@ def test_grouped_missing(caplog, missing_file):
         assert "Adding this element as text." in caplog.text
 
 
+@pytest.mark.parametrize("common", ["string",
+                                    content_dir + "colored_animals/dog_blue.jpg",
+                                    "non_existing_file.jpg"])
+def test_grouped_missing_common(caplog, common):
+    """ Test if non-grouped file is missing """
+
+    config = {"grouped_content": [common,
+                                  content_dir + "colored_animals/(.*)_red.jpg"],  # red animal is present in all groups
+              "missing_file": "raise"}
+
+    report = PowerPointReport(verbosity=2)
+    if common == "non_existing_file.jpg":
+        with pytest.raises(FileNotFoundError, match=r"No file could be found for grouped input"):
+            report.add_slide(**config)
+    else:
+        report.add_slide(**config)  # no error
+
+        if "dog_blue" in common:   # warning that file does not contain a group
+            assert "the pattern does not contain a capturing group " in caplog.text
+
+
 @pytest.mark.parametrize("empty_slide", ["keep", "skip"])
 def test_grouped_missing_empty(caplog, empty_slide):
 
