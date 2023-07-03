@@ -921,6 +921,10 @@ class PowerPointReport():
             # Find all files that match the regex
             files = self._glob_regex(pattern)
 
+            # Check if any files were found and raise error if none were found for file-looking patterns
+            if len(files) == 0 and _looks_like_filename(pattern) and missing_file == "raise":
+                raise FileNotFoundError(f"No files were found for the pattern: {pattern}. Adjust missing_file parameter to 'empty', 'text' or 'skip' to avoid this error.") 
+
             # Find all groups within the regex
             warning = 0
             for fil in files:
@@ -937,8 +941,8 @@ class PowerPointReport():
 
                     else:  # 0 groups
                         if warning == 0:
-                            s = f"Pattern '{pattern}' for 'grouped_content' matches at least 1 file, but the pattern does not contain a capturing group (e.g. '(\\w+)_plot.pdf'). "
-                            s += "Capturing groups are needed to automatically expand content to multiple slides. "
+                            s = f"Pattern '{pattern}' does not contain a capturing group (e.g. '(\\w+)_plot.pdf'), but "
+                            s += "capturing groups are needed to automatically expand content to multiple slides. "
                             if len(files) > 1:
                                 s += f"The pattern matches multiple files, but only one file ('{files[0]}') will be shown. "
                             s += "This content will appear on all expanded slides - please adjust the pattern if needed."
