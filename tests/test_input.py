@@ -127,12 +127,13 @@ def test_grouped_content(grouped_content, valid):
 
 def test_grouped_content_warning(caplog):
     """ Test that a warning is written when no groups are found """
-    config = {"grouped_content": [content_dir + "colored_animals/.*_blue.jpg"]}
+    config = {"grouped_content": [content_dir + "colored_animals/.*_blue.jpg"],
+              "missing_file": "text"}
 
     report = PowerPointReport()
     report.add_slide(**config)
     assert "WARNING" in caplog.text
-    assert "the pattern does not contain a capturing group" in caplog.text
+    assert "does not contain a capturing group" in caplog
 
 
 @pytest.mark.parametrize("missing_file", ["raise", "empty", "skip", "text"])
@@ -173,13 +174,13 @@ def test_grouped_missing_common(caplog, common):
 
     report = PowerPointReport(verbosity=2)
     if common == "non_existing_file.jpg":
-        with pytest.raises(FileNotFoundError, match=r"No file could be found for grouped input"):
+        with pytest.raises(FileNotFoundError, match=r"No files were found for the pattern"):
             report.add_slide(**config)
     else:
         report.add_slide(**config)  # no error
 
         if "dog_blue" in common:   # warning that file does not contain a group
-            assert "the pattern does not contain a capturing group " in caplog.text
+            assert "does not contain a capturing group " in caplog.text
 
 
 @pytest.mark.parametrize("empty_slide", ["keep", "skip"])
@@ -193,7 +194,7 @@ def test_grouped_missing_empty(caplog, empty_slide):
     report.add_slide(**config)
 
     if empty_slide == "keep":
-        assert "Adding empty slide." in caplog.text
+        assert "Adding slide without content." in caplog.text
         assert len(report._slides) == 1
 
     elif empty_slide == "skip":
