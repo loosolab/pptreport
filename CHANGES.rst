@@ -1,3 +1,7 @@
+1.1.1 (03-07-2023)
+--------------------
+- Fixed bug where missing files in `grouped_content` raised an error even when missing_file="text". Combinations of empty_slide=="skip" and missing_file="text"/"empty"/"skip" now work the same as for regular content lists.
+
 1.1.0 (23-06-2023)
 --------------------
 - Reworked markdown parsing to allow for headers (`# header`), lists (`- item 1`) and nested types (`**partly bold and _italics_ string**`). Unsupported markdown types are logged as warnings and added as plain text.
