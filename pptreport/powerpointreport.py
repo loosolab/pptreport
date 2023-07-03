@@ -521,7 +521,7 @@ class PowerPointReport():
 
             # If no grouped content was found, add empty slide if empty_slide is "keep"
             if len(content_per_group) == 0 and parameters["empty_slide"] == "keep":
-                self.logger.warning(f"No grouped content found for input: '{parameters['grouped_content']}, but empty_slide == 'keep'. Adding empty slide. Set empty_slide == 'skip' to skip slides without content.")
+                self.logger.warning(f"No groups found for grouped_content: '{parameters['grouped_content']}, but empty_slide == 'keep'. Adding empty slide. Set empty_slide == 'skip' to skip slides without content.")
                 slide = self._setup_slide(parameters)
                 slide.content = parameters["grouped_content"] if parameters["missing_file"] == "text" else []
                 slide._filenames = [""] * len(slide.content)
