@@ -133,7 +133,7 @@ def test_grouped_content_warning(caplog):
     report = PowerPointReport()
     report.add_slide(**config)
     assert "WARNING" in caplog.text
-    assert "does not contain a capturing group" in caplog
+    assert "does not contain a capturing group" in caplog.text
 
 
 @pytest.mark.parametrize("missing_file", ["raise", "empty", "skip", "text"])
@@ -172,7 +172,7 @@ def test_grouped_missing_common(caplog, common):
                                   content_dir + "colored_animals/(.*)_red.jpg"],  # red animal is present in all groups
               "missing_file": "raise"}
 
-    report = PowerPointReport(verbosity=2)
+    report = PowerPointReport()
     if common == "non_existing_file.jpg":
         with pytest.raises(FileNotFoundError, match=r"No files were found for the pattern"):
             report.add_slide(**config)
@@ -190,7 +190,7 @@ def test_grouped_missing_empty(caplog, empty_slide):
               "missing_file": "skip",
               "empty_slide": empty_slide}
 
-    report = PowerPointReport(verbosity=2)
+    report = PowerPointReport()
     report.add_slide(**config)
 
     if empty_slide == "keep":

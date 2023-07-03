@@ -521,7 +521,7 @@ class PowerPointReport():
 
             # If no grouped content was found, add empty slide if empty_slide is "keep"
             if len(content_per_group) == 0 and parameters["empty_slide"] == "keep":
-                self.logger.warning(f"No files found for grouped_content: '{parameters['grouped_content']}, but empty_slide == 'keep'. Adding empty slide. Set empty_slide == 'skip' to skip slides without content.")
+                self.logger.warning(f"No files found for grouped_content: '{parameters['grouped_content']}, but empty_slide == 'keep'. Adding slide without content. Set empty_slide == 'skip' to skip slides without content.")
                 slide = self._setup_slide(parameters)
 
                 if parameters["missing_file"] == "text":
@@ -947,7 +947,7 @@ class PowerPointReport():
                                 s += f"The pattern matches multiple files, but only one file ('{files[0]}') will be shown. "
                             s += "This content will appear on all expanded slides - please adjust the pattern if needed."
                             self.logger.warning(s)
-                        warning += 1  # ensure warning is only printed once per pattern
+                            warning += 1  # ensure warning is only printed once per pattern
 
                         raw_content[i] = files[0]  # replace pattern with file
 
