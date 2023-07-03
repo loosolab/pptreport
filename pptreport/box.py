@@ -362,7 +362,7 @@ class Box():
             image_ratio = im_width / im_height
             new_height = int(np.sqrt(max_pixels / image_ratio))   # height * height * (width / height) = max_pixels
             new_width = int(new_height * image_ratio)
-            self.logger.warning(f"Image '{filename}' is larger than max_pixels={max_pixels} ({im_height}*{im_width}={image_pixels}). Adjust 'max_pixels' to skip resizing. Resizing to size {new_height}*{new_width}...")
+            self.logger.warning(f"Image '{filename}' is larger than max_pixels={int(max_pixels)} ({im_height}*{im_width}={image_pixels}). Adjust 'max_pixels' to skip resizing. Resizing to size {new_height}*{new_width}...")
 
             im = im.resize((new_width, new_height), Image.LANCZOS)
 
