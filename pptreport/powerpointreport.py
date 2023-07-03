@@ -90,6 +90,16 @@ def _looks_like_filename(string):
         return False  # string does not look like a filename
 
 
+def _regex_has_group(pattern):
+    """ Check if the pattern contains any capturing groups """
+
+    try:
+        match = re.search(r'(\(.*?\))', pattern)
+        return bool(match)
+    except re.error:
+        return False
+
+
 ###############################################################################
 # -------------------- Class for building presentation ---------------------- #
 ###############################################################################
@@ -507,11 +517,18 @@ class PowerPointReport():
         # Add slides dependent on content type
         if "grouped_content" in parameters:
 
-            content_per_group = self._get_paired_content(parameters["grouped_content"])
-            self.logger.debug("Grouped content: {}".format(content_per_group))
+            content_per_group = self._get_paired_content(parameters["grouped_content"], parameters["missing_file"])
 
-            tmp_files = []
+            # If no grouped content was found, add empty slide if empty_slide is "keep"
+            if len(content_per_group) == 0 and parameters["empty_slide"] == "keep":
+                slide = self._setup_slide(parameters)
+                slide.content = parameters["grouped_content"] if parameters["missing_file"] == "text" else []
+                slide._filenames = [""] * len(slide.content)
+                slide._fill_slide()
+                return
+
             # Create one slide per group
+            tmp_files = []
             for group, content in content_per_group.items():
 
                 # Save original filenames / content
@@ -836,6 +853,9 @@ class PowerPointReport():
             List of files that match the regex pattern.
         """
 
+        if pattern is None:
+            return []
+
         # Remove ( and ) from regex as they are only used to group regex later
         pattern_clean = re.sub(r'(?<!\\)[\(\)]', '', pattern)
         self.logger.debug(f"Finding files for possible regex pattern: {pattern_clean}")
@@ -869,13 +889,15 @@ class PowerPointReport():
 
         return matched_files
 
-    def _get_paired_content(self, raw_content):
+    def _get_paired_content(self, raw_content, missing_file="raise"):
         """ Get content per group from a list of regex patterns.
 
         Parameters
         ----------
         raw_content : list of str
             List of regex patterns. Each pattern should contain one group.
+        missing_file : str, optional
+            How to deal with missing files. Options are 'raise', 'empty', 'text' or 'skip'. Default is 'raise'.
 
         Returns
         -------
@@ -885,46 +907,93 @@ class PowerPointReport():
 
         # Search for regex groups
         group_content = {}  # dict of lists of content input
-        n_group_matches = 0
         for i, pattern in enumerate(raw_content):
             group_content[i] = {}
 
+            # Find all files that match the regex
             files = self._glob_regex(pattern)
 
             # Find all groups within the regex
+            warning = 0
             for fil in files:
 
                 m = re.match(pattern, fil)
                 if m:  # if there was a match
 
                     groups = m.groups()
-                    if len(groups) == 0:
-                        raise ValueError(f"Invalid value for 'grouped_content' parameter. Regex {pattern} does not contain any groups.")
-                    elif len(groups) > 1:
+                    if len(groups) > 1:
                         raise ValueError(f"Invalid value for 'grouped_content' parameter. Regex {pattern} contains more than one group.")
-                    group = groups[0]
+                    elif len(groups) == 1:
+                        group = groups[0]
+                        group_content[i][group] = fil  # Save the file to the group
 
-                    # Save the file to the group
-                    group_content[i][group] = fil
-                    n_group_matches += 1
+                    else:  # 0 groups
+                        if warning == 0:
+                            s = f"Pattern '{pattern}' for 'grouped_content' matches at least 1 file, but the pattern does not contain a capturing group (e.g. '(\\w+)_plot.pdf'). "
+                            s += "Capturing groups are needed to automatically expand content to multiple slides. "
+                            if len(files) > 1:
+                                s += f"The pattern matches multiple files, but only one file ('{files[0]}') will be shown. "
+                            s += "This content will appear on all expanded slides - please adjust the pattern if needed."
+                            self.logger.warning(s)
+                        warning += 1  # ensure warning is only printed once per pattern
 
-        # Check that at least one group was found
-        if n_group_matches == 0:
-            raise ValueError(f"Invalid value for 'grouped_content' parameter: {raw_content}. No groups were found for any of the regex patterns.")
+                        raw_content[i] = files[0]  # replace pattern with file
 
         # Collect all groups found
         all_regex_groups = sum([list(d.keys()) for d in group_content.values()], [])  # flatten list of lists
         all_regex_groups = natsorted(set(all_regex_groups))
         self.logger.debug(f"Found groups: {all_regex_groups}")
 
-        # If no groups were found for an element, add strings for each group
-        for i in group_content:
+        # If no groups were found for an element, add strings for each group (.e.g. strings/files repeated for each slide)
+        content_per_group = {group: [] for group in all_regex_groups}
+        for i in group_content:  # index of raw_content
+            raw_input = raw_content[i]
+
             if len(group_content[i]) == 0:
+
+                if _looks_like_filename(raw_input) and not os.path.isfile(raw_input):
+                    if missing_file == "raise":
+                        raise FileNotFoundError(f"No files could be found for pattern: '{raw_input}'. Adjust pattern or set missing_file='empty'/'text'/'skip' to ignore the missing file.")
+                    elif missing_file == "empty":
+                        self.logger.warning(f"No files could be found for pattern: '{raw_input}'. Adding empty box.")
+                        raw_input = ""
+                    elif missing_file == "skip":
+                        continue  # skip this element
+                    elif missing_file == "text":
+                        pass  # keep raw_input as is
+
                 for group in all_regex_groups:
-                    group_content[i][group] = raw_content[i]
+                    content_per_group[group].append(raw_input)  # this is the same for each slide
+
+            else:
+                for group in group_content[i].keys():
+                    content_per_group[group].append(group_content[i][group])
+
+                missing_groups = list(set(all_regex_groups) - set(group_content[i].keys()))
+                if len(missing_groups) > 0:
+
+                    if missing_file == "raise":
+                        s = f"Missing file(s) for grouped content pattern '{raw_input}' for group(s): {missing_groups}."
+                        s += " Please ensure that the file(s) exists or adjust 'missing_file' parameter to 'text'/'empty'/'skip' to prevent this error."
+                        raise ValueError(s)
+
+                    else:
+                        self.logger.debug(f"Missing file for index {i} for groups: {missing_groups}")
+                        for group in missing_groups:
+                            pattern = r"\((.*?)\)"
+
+                            if missing_file == "text":
+                                element = re.sub(pattern, group, raw_content[i])
+                            elif missing_file == "empty":
+                                element = None  # empty box
+                            elif missing_file == "skip":
+                                continue  # do not add box to slide
+
+                            # fill group name into pattern group
+                            content_per_group[group].append(element) 
 
         # Convert from group per element to element per group
-        content_per_group = {group: [group_content[i].get(group, None) for i in group_content] for group in all_regex_groups}
+        self.logger.debug(f"Content per group: {content_per_group}")
 
         return content_per_group
 
