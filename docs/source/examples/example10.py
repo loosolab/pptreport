@@ -24,5 +24,5 @@ report.add_slide(["subheader 1", "subheader 2", "content/lion-not-present.jpg", 
                  missing_file="text",
                  empty_slide="skip")  # this slide will also not be shown even if headers are present
 
-report.write_config("example11.json")
-report.save("example11.pptx", pdf=True)
+report.write_config("example10.json")
+report.save("example10.pptx", pdf=True)

@@ -28,5 +28,5 @@ report.add_slide(grouped_content=["Blue animal", "Yellow animal",
                                   "content/colored_animals/(\w+)_yellow.jpg"],
                  missing_file="empty")
 
-report.write_config("example10.json")
-report.save("example10.pptx", pdf=True)
+report.write_config("example11.json")
+report.save("example11.pptx", pdf=True)
