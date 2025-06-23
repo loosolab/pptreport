@@ -1,3 +1,7 @@
+1.1.2 (in progress)
+--------------------
+- removed Pillow restriction as it caused an installation error and the new version is now supported by python-pptx (>= v0.6.23)
+
 1.1.1 (03-07-2023)
 --------------------
 - Fixed bug where missing files in `grouped_content` raised an error even when missing_file="text". Combinations of empty_slide=="skip" and missing_file="text"/"empty"/"skip" now work the same as for regular content lists.
