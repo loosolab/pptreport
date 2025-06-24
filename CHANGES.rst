@@ -1,5 +1,6 @@
 1.1.2 (in progress)
 --------------------
+- replace pkg_resources (deprecated) with importlib_resources
 - removed Pillow restriction as it caused an installation error and the new version is now supported by python-pptx (>= v0.6.23)
 
 1.1.1 (03-07-2023)

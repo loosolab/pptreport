@@ -1,6 +1,7 @@
 import os
 import re
-import pkg_resources
+import importlib_resources
+from contextlib import ExitStack
 import tempfile
 import numpy as np
 
@@ -43,7 +44,10 @@ def estimate_fontsize(txt_frame, text, min_size=6, max_size=18, logger=None):
     """
 
     # Get font
-    font = pkg_resources.resource_filename("pptreport", "fonts/OpenSans-Regular.ttf")
+    # https://importlib-resources.readthedocs.io/en/latest/migration.html#pkg-resources-resource-filename
+    file_manager = ExitStack()
+    ref = importlib_resources.files("pptreport") / "fonts/OpenSans-Regular.ttf"
+    font = file_manager.enter_context(importlib_resources.as_file(ref))
 
     # Calculate best fontsize
     size = None
@@ -71,6 +75,8 @@ def estimate_fontsize(txt_frame, text, min_size=6, max_size=18, logger=None):
 
             except TypeError:
                 max_word_len = int(max_word_len / 2)  # decrease word length
+    finally:
+        file_manager.close()  # close open font file
 
     # the output of textfitter is None if the text does not fit; set text to smallest size
     if size is None:
