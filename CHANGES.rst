@@ -1,5 +1,7 @@
 1.1.2 (in progress)
 --------------------
+- implemented PDF file content sanity-check (PowerPointReport._convert_pdf)
+- fixed numpy import
 - replace pkg_resources (deprecated) with importlib_resources
 - removed Pillow restriction as it caused an installation error and the new version is now supported by python-pptx (>= v0.6.23)
 
