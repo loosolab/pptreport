@@ -1,4 +1,4 @@
-1.1.2 (in progress)
+1.1.2 (24-06-2025)
 --------------------
 - implemented PDF file content sanity-check (PowerPointReport._convert_pdf)
 - fixed numpy import
