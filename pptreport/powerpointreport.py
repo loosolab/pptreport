@@ -654,7 +654,16 @@ class PowerPointReport():
 
         # open pdf with fitz module from pymupdf
         try:
-            doc = fitz.open(pdf)
+            def is_pdf(filepath):
+                """Check whether file contents follow pdf format."""
+                with open(filepath, "rb") as f:
+                    header = f.read(5)
+                    return header == b"%PDF-"
+
+            if is_pdf(pdf):
+                doc = fitz.open(pdf)
+            else:
+                raise ValueError("File contents not in PDF format!")
         except Exception as e:
             raise ValueError(f"Could not open .pdf file: {pdf}. Error was: {e}")
 
