@@ -3,7 +3,7 @@ import os
 from pptx.util import Emu, Cm
 from pptreport.box import Box
 import warnings
-from numpy import VisibleDeprecationWarning
+from numpy.exceptions import VisibleDeprecationWarning
 
 
 class Slide():

@@ -3,7 +3,7 @@ channels:
     - bioconda
     - conda-forge
 dependencies:
-  - python==3.9.15 #pin due to issue in python-pptx #13
+  - python
   - notebook
   - pip
   - pip:
