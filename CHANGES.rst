@@ -1,3 +1,7 @@
+1.1.3 (in progress)
+--------------------
+- support numpy<2
+
 1.1.2 (24-06-2025)
 --------------------
 - implemented PDF file content sanity-check (PowerPointReport._convert_pdf)
