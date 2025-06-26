@@ -4,6 +4,7 @@ from pptx.util import Emu, Cm
 from pptreport.box import Box
 import warnings
 
+# try import for nump>=2 else try numpy<2
 try:
     from numpy.exceptions import VisibleDeprecationWarning
 except ModuleNotFoundError:
