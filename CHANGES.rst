@@ -1,6 +1,6 @@
 1.1.3 (in progress)
 --------------------
-- support numpy<2
+- fixed bug prohibiting numpy<2
 
 1.1.2 (24-06-2025)
 --------------------
