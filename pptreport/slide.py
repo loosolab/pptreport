@@ -3,7 +3,12 @@ import os
 from pptx.util import Emu, Cm
 from pptreport.box import Box
 import warnings
-from numpy.exceptions import VisibleDeprecationWarning
+
+# try import for nump>=2 else try numpy<2
+try:
+    from numpy.exceptions import VisibleDeprecationWarning
+except ModuleNotFoundError:
+    from numpy import VisibleDeprecationWarning
 
 
 class Slide():
