@@ -1,4 +1,4 @@
-1.1.3 (in progress)
+1.1.3 (26-06-2025)
 --------------------
 - fixed bug prohibiting numpy<2
 
