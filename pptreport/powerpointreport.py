@@ -395,7 +395,7 @@ class PowerPointReport():
             if not isinstance(parameters["grouped_content"], list):
                 raise TypeError(f"Invalid value for 'grouped_content' parameter: {parameters['grouped_content']}. 'grouped_content' must be a list.")
 
-    def add_title_slide(self, title, layout=0, subtitle=None):
+    def add_title_slide(self, title, layout=0, subtitle=None, **kwargs):
         """
         Add a title slide to the presentation.
 
@@ -407,9 +407,11 @@ class PowerPointReport():
             The layout of the slide. The first layout (0) is usually the default title slide.
         subtitle : str, optional
             Subtitle of the slide if the layout has a suptitle placeholder.
+        **kwargs : optional
+            Forwarded to PowerPointReport.add_slide
         """
 
-        self.add_slide(title=title, slide_layout=layout)
+        self.add_slide(title=title, slide_layout=layout, **kwargs)
         slide = self._slides[-1]._slide  # pptx slide object
 
         # Fill placeholders
