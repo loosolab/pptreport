@@ -1,3 +1,7 @@
+1.1.4 (19-11-2025)
+------------------
+- fix KeyError: 'no placeholder on this slide with idx == 1' in add_title_slide
+
 1.1.3 (26-06-2025)
 --------------------
 - fixed bug prohibiting numpy<2
