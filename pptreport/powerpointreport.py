@@ -415,7 +415,7 @@ class PowerPointReport():
         # Fill placeholders
         if subtitle is not None:
             if len(slide.placeholders) == 2:
-                slide.placeholders[1].text = subtitle
+                list(slide.placeholders)[1].text = subtitle  # list() to fix KeyError: 'no placeholder on this slide with idx == 1'
 
     def add_slide(self,
                   content=None,
